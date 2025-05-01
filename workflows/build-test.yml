@@ -1,0 +1,84 @@
+name: Full CI
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Docker image name (e.g. my-org/myapp)"
+        required: true
+        type: string
+      registry:
+        required: false
+        type: string
+        default: ghcr.io
+    secrets:
+      REGISTRY_USER:
+        description: "Docker registry username"
+        required: true
+      REGISTRY_PASSWORD:
+        description: "Docker registry password"
+        required: true
+      NPM_TOKEN:
+        description: "Auth token for npm publish"
+        required: true
+
+jobs:
+
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: agent-ix/nodejs-actions/image-metadata@main
+        with:
+          image: ${{ inputs.image }}
+          registry: ${{ inputs.registry }}
+
+  build:
+    runs-on: ubuntu-latest
+    needs: metadata
+    steps:
+      - uses: actions/checkout@v4
+      - uses: agent-ix/build-image@main
+        with:
+          image: ${{ inputs.image }}
+          metadata_artifact: image.json
+        secrets: inherit
+
+  jest:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: agent-ix/nodejs-actions/jest@main
+        with:
+          registry_user: ${{ secrets.REGISTRY_USER }}
+          registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+
+  eslint:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: agent-ix/nodejs-actions/eslint@main
+        with:
+          registry_user: ${{ secrets.REGISTRY_USER }}
+          registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+
+  prettier:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: agent-ix/nodejs-actions/prettier@main
+        with:
+          registry_user: ${{ secrets.REGISTRY_USER }}
+          registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: agent-ix/nodejs-actions/publish@main
+        with:
+          artifact: image.json
+          token: ${{ secrets.NPM_TOKEN }}
+          registry: https://registry.npmjs.org

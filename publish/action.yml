@@ -1,0 +1,65 @@
+name: "Release to npm"
+description: "Publishes a Node.js package to the configured npm registry using a Docker dev image"
+
+inputs:
+  artifact:
+    description: "Path to image.json containing the image reference"
+    required: true
+  token:
+    description: "NPM auth token (must have write access)"
+    required: true
+  registry:
+    description: "Registry URL for publishing (e.g., https://npm.pkg.github.com)"
+    required: false
+    default: "https://registry.npmjs.org"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load image metadata
+      id: meta
+      shell: bash
+      run: |
+        IMAGE=$(jq -r '.image + ":" + .tag' "${{ inputs.artifact }}")
+        VERSION=$(jq -r '.tag' "${{ inputs.artifact }}")
+        echo "IMAGE=$IMAGE" >> "$GITHUB_OUTPUT"
+        echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Run npm publish inside container
+      shell: bash
+      run: |
+        docker pull "${{ steps.meta.outputs.IMAGE }}"
+        docker run --rm \
+          -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
+          -e NPM_CONFIG_REGISTRY="${{ inputs.registry }}" \
+          -v "$PWD:/app" \
+          -w /app \
+          "${{ steps.meta.outputs.IMAGE }}" \
+          npm publish
+
+    - name: Write summary
+      shell: bash
+      run: |
+        PKG=$(jq -r .name package.json)
+        VERSION="${{ steps.meta.outputs.VERSION }}"
+
+        echo "### 📦 npm Package Published" >> $GITHUB_STEP_SUMMARY
+        echo "- Version: \`${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Registry: \`${{ inputs.registry }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Package ID:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "${PKG}@${VERSION}" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+        if [[ "${{ inputs.registry }}" == *"github.com"* ]]; then
+          echo "- Example install:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "npm install @${{ github.repository_owner }}/$PKG" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "- URL: https://github.com/${{ github.repository_owner }}/packages" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- Example install:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "npm install $PKG@${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "- URL: https://www.npmjs.com/package/$PKG/v/${VERSION}" >> $GITHUB_STEP_SUMMARY

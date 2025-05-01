@@ -1,0 +1,43 @@
+name: "Run Prettier"
+description: "Runs Prettier inside a Docker container"
+
+inputs:
+  registry_user:
+    description: "Registry username"
+    required: true
+  registry_password:
+    description: "Registry password"
+    required: true
+  artifact:
+    description: "Path to image.json"
+    required: false
+    default: "image.json"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: agent-ix/docker-actions/pull@main
+      id: image
+      with:
+        artifact: ${{ inputs.artifact }}
+        registry_user: ${{ secrets.REGISTRY_USER }}
+        registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+
+    - name: Run Prettier
+      shell: bash
+      run: |
+        docker run --rm -v "$PWD:/app" -w /app ${{ steps.image.outputs.url }} pnpm format
+
+    - name: Upload summary
+      shell: bash
+      run: |
+        echo "✅ Prettier complete" >> $GITHUB_STEP_SUMMARY
+        mkdir -p results
+        echo '{"status":"ok"}' > results/prettier.json
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: prettier.json
+        path: results/prettier.json

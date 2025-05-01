@@ -1,0 +1,49 @@
+name: "Image Metadata"
+description: "Generates image.json from package.json"
+
+inputs:
+  image:
+    required: true
+    description: "Docker image name"
+  artifact:
+    required: false
+    default: "image.json"
+    description: "Output file name"
+
+outputs:
+  version:
+    description: "Resolved version"
+    value: ${{ steps.data.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Extract version and description
+      id: data
+      shell: bash
+      run: |
+        desc=$(jq -r .description package.json)
+        echo "description=$desc" >> $GITHUB_OUTPUT
+        echo "version=$(make version)" >> "$GITHUB_OUTPUT"
+
+    - name: Write image.json
+      shell: bash
+      run: |
+        cat <<EOF > ${{ inputs.artifact }}
+        {
+          "registry": "ghcr.io",
+          "repository": "${{ inputs.image }}",
+          "tag": "${{ steps.meta.outputs.version }}",
+          "image": "ghcr.io/${{ inputs.image }}",
+          "url": "ghcr.io/${{ inputs.image }}:${{ steps.data.outputs.version }}",
+          "description": "${{ steps.data.outputs.description }}",
+          "source": "https://github.com/${{ github.repository }}",
+          "version": "${{ steps.data.outputs.version }}"
+        }
+        EOF
+        cat ${{ inputs.artifact }}
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ inputs.artifact }}
