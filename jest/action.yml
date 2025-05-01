@@ -22,8 +22,8 @@ runs:
       id: image
       with:
         artifact: ${{ inputs.artifact }}
-        registry_user: ${{ secrets.REGISTRY_USER }}
-        registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+        registry_user: ${{ secrets.registry_user }}
+        registry_password: ${{ secrets.registry_password }}
 
     - name: Run Jest
       shell: bash

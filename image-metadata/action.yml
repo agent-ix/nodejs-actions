@@ -1,49 +1,46 @@
 name: "Image Metadata"
-description: "Generates image.json from package.json"
+description: "Generates image.json for dev container"
 
 inputs:
   image:
     required: true
-    description: "Docker image name"
+    description: "Docker image name (e.g. org/service)"
   artifact:
     required: false
     default: "image.json"
-    description: "Output file name"
+    description: "Output artifact filename"
+  tag_prefix:
+    required: false
+    description: "Optional prefix to prepend to tag (e.g. dev, base)"
 
 outputs:
   version:
     description: "Resolved version"
-    value: ${{ steps.data.outputs.version }}
+    value: ${{ steps.meta.outputs.version }}
+  url:
+    description: "Fully qualified image URL"
+    value: ${{ steps.meta.outputs.url }}
+  image:
+    description: "Image path without tag"
+    value: ${{ steps.meta.outputs.image }}
 
 runs:
   using: "composite"
   steps:
-    - name: Extract version and description
+    - name: Extract version and description from package.json
       id: data
       shell: bash
       run: |
         desc=$(jq -r .description package.json)
-        echo "description=$desc" >> $GITHUB_OUTPUT
+        echo "description=$desc" >> "$GITHUB_OUTPUT"
         echo "version=$(make version)" >> "$GITHUB_OUTPUT"
 
-    - name: Write image.json
-      shell: bash
-      run: |
-        cat <<EOF > ${{ inputs.artifact }}
-        {
-          "registry": "ghcr.io",
-          "repository": "${{ inputs.image }}",
-          "tag": "${{ steps.meta.outputs.version }}",
-          "image": "ghcr.io/${{ inputs.image }}",
-          "url": "ghcr.io/${{ inputs.image }}:${{ steps.data.outputs.version }}",
-          "description": "${{ steps.data.outputs.description }}",
-          "source": "https://github.com/${{ github.repository }}",
-          "version": "${{ steps.data.outputs.version }}"
-        }
-        EOF
-        cat ${{ inputs.artifact }}
-
-    - uses: actions/upload-artifact@v4
+    - name: Generate image metadata
+      id: meta
+      uses: agent-ix/docker-actions/create-metadata@v1
       with:
-        name: ${{ inputs.artifact }}
-        path: ${{ inputs.artifact }}
+        image: ${{ inputs.image }}
+        version: ${{ steps.data.outputs.version }}
+        description: ${{ steps.data.outputs.description }}
+        artifact: ${{ inputs.artifact }}
+        tag_prefix: ${{ inputs.tag_prefix }}
