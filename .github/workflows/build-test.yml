@@ -36,7 +36,7 @@ jobs:
         with:
           registry: ${{ inputs.registry }}
           repository: ${{ inputs.repository }}
-          tag_prefex: "dev"
+          tag_prefix: "dev"
 
   build:
     runs-on: ubuntu-latest
