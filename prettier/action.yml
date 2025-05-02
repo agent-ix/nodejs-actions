@@ -22,8 +22,8 @@ runs:
       id: image
       with:
         artifact: ${{ inputs.artifact }}
-        registry_user: ${{ secrets.registry_user }}
-        registry_password: ${{ secrets.registry_password }}
+        registry_user: ${{ inputs.registry_user }}
+        registry_password: ${{ inputs.registry_password }}
 
     - name: Run Prettier
       shell: bash
