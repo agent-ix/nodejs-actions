@@ -86,3 +86,5 @@ jobs:
           artifact: image.json
           token: ${{ secrets.NPM_TOKEN }}
           registry: ${{ inputs.npm }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
