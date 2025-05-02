@@ -34,8 +34,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: agent-ix/nodejs-actions/image-metadata@main
         with:
-          image: ${{ inputs.image }}
           registry: ${{ inputs.registry }}
+          tag_prefex: "dev"
 
   build:
     runs-on: ubuntu-latest

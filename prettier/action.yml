@@ -28,7 +28,7 @@ runs:
     - name: Run Prettier
       shell: bash
       run: |
-        docker compose run --rm ${{ steps.image.outputs.url }} pnpm format
+        docker compose run --rm ${{ steps.image.outputs.url }} dev pnpm prettier --check .
 
     - name: Upload summary
       shell: bash

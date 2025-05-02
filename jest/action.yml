@@ -28,7 +28,7 @@ runs:
     - name: Run Jest
       shell: bash
       run: |
-        docker compose run --rm ${{ steps.image.outputs.url }} pnpm test
+        docker compose run --rm ${{ steps.image.outputs.url }} dev pnpm jest
 
     - name: Upload summary
       shell: bash
