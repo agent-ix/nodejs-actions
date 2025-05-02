@@ -46,7 +46,6 @@ jobs:
         with:
           image: ${{ inputs.image }}
           metadata_artifact: image.json
-        secrets: inherit
 
   jest:
     runs-on: ubuntu-latest
