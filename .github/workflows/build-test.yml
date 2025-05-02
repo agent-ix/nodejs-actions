@@ -42,7 +42,7 @@ jobs:
     needs: metadata
     steps:
       - uses: actions/checkout@v4
-      - uses: agent-ix/docker-actions/build-image@main
+      - uses: agent-ix/docker-actions/build@main
         with:
           image: ${{ inputs.image }}
           metadata_artifact: image.json
