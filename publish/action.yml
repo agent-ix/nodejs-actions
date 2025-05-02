@@ -31,13 +31,21 @@ runs:
         registry_user: ${{ inputs.registry_user }}
         registry_password: ${{ inputs.registry_password }}
 
-    - name: Run pnpm publish inside container
+    - name: Inject version into package.json
+      shell: bash
+      run: |
+        jq --arg version "${{ steps.image.outputs.version }}" \
+        '.version = $version' package.json > tmp \
+        && mv tmp package.json
+
+    - name: Publish to npm
       shell: bash
       run: |
         docker compose run --rm \
           -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
-          -e NPM_CONFIG_REGISTRY="${{ inputs.registry }}" \
-          dev pnpm publish
+          dev /bin/bash -c "echo '//npm.pkg.github.com/:_authToken=\$NODE_AUTH_TOKEN' > ~/.npmrc && npm publish \
+          --tag ${{ steps.version.outputs.version }} \
+          --no-git-checks"
 
     - name: Write summary
       shell: bash
