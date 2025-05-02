@@ -28,7 +28,7 @@ runs:
     - name: Run ESLint
       shell: bash
       run: |
-        docker compose run --rm ${{ steps.image.outputs.url }} dev pnpm eslint
+        docker compose run --rm ${{ steps.image.outputs.image }} dev pnpm eslint
 
     - name: Upload summary
       shell: bash
