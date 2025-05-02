@@ -28,7 +28,7 @@ runs:
     - name: Run Prettier
       shell: bash
       run: |
-        docker run --rm -v "$PWD:/app" -w /app ${{ steps.image.outputs.url }} pnpm format
+        docker compose run --rm ${{ steps.image.outputs.url }} pnpm format
 
     - name: Upload summary
       shell: bash
