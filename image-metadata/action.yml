@@ -37,7 +37,7 @@ runs:
 
     - name: Generate image metadata
       id: meta
-      uses: agent-ix/docker-actions/create-metadata@v1
+      uses: agent-ix/docker-actions/create-metadata@main
       with:
         image: ${{ inputs.image }}
         version: ${{ steps.data.outputs.version }}
