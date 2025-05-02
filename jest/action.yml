@@ -28,7 +28,7 @@ runs:
     - name: Run Jest
       shell: bash
       run: |
-        docker run --rm -v "$PWD:/app" -w /app ${{ steps.meta.outputs.url }} pnpm test
+        docker run --rm -v "$PWD:/app" -w /app ${{ steps.image.outputs.url }} pnpm test
 
     - name: Upload summary
       shell: bash

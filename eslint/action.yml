@@ -28,7 +28,7 @@ runs:
     - name: Run ESLint
       shell: bash
       run: |
-        docker run --rm -v "$PWD:/app" -w /app ${{ steps.meta.outputs.url }} pnpm lint
+        docker run --rm -v "$PWD:/app" -w /app ${{ steps.image.outputs.url }} pnpm lint
 
     - name: Upload summary
       shell: bash
