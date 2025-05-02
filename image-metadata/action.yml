@@ -2,7 +2,11 @@ name: "Image Metadata"
 description: "Generates image.json for dev container"
 
 inputs:
-  image:
+  registry:
+    required: false
+    type: string
+    default: ghcr.io
+  repository:
     required: true
     description: "Docker image name (e.g. org/service)"
   artifact:
@@ -39,7 +43,8 @@ runs:
       id: meta
       uses: agent-ix/docker-actions/create-metadata@main
       with:
-        image: ${{ inputs.image }}
+        registry: ${{ inputs.registry }}
+        repository: ${{ inputs.repository }}
         version: ${{ steps.data.outputs.version }}
         description: ${{ steps.data.outputs.description }}
         artifact: ${{ inputs.artifact }}

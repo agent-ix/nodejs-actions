@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_call:
     inputs:
-      image:
+      repository:
         description: "Docker image name (e.g. my-org/myapp)"
         required: true
         type: string
@@ -35,6 +35,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/image-metadata@main
         with:
           registry: ${{ inputs.registry }}
+          repository: ${{ inputs.repository }}
           tag_prefex: "dev"
 
   build:
