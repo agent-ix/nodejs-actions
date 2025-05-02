@@ -44,8 +44,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: agent-ix/docker-actions/build@main
         with:
-          image: ${{ inputs.image }}
-          metadata_artifact: image.json
+          artifact: image.json
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   jest:
     runs-on: ubuntu-latest
@@ -53,8 +55,8 @@ jobs:
     steps:
       - uses: agent-ix/nodejs-actions/jest@main
         with:
-          registry_user: ${{ secrets.REGISTRY_USER }}
-          registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   eslint:
     runs-on: ubuntu-latest
@@ -62,8 +64,8 @@ jobs:
     steps:
       - uses: agent-ix/nodejs-actions/eslint@main
         with:
-          registry_user: ${{ secrets.REGISTRY_USER }}
-          registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   prettier:
     runs-on: ubuntu-latest
@@ -71,8 +73,8 @@ jobs:
     steps:
       - uses: agent-ix/nodejs-actions/prettier@main
         with:
-          registry_user: ${{ secrets.REGISTRY_USER }}
-          registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   publish:
     runs-on: ubuntu-latest
