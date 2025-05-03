@@ -42,9 +42,14 @@ runs:
       env:
         NODE_AUTH_TOKEN: ${{ inputs.token }}
       run: |
-        PR="${{ github.event.pull_request.number }}"
+        PR=$(gh pr list --state open --json number,headRefOid \
+          --jq ".[] | select(.headRefOid == \"${{ github.sha }}\") | .number")
+        echo "Found PR: $PR"
+        echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
         BASE_VERSION="${{ steps.image.outputs.version }}"
         PKG_NAME=$(node -p "require('./package.json').name")
+        echo "📦 Base version: $BASE_VERSION"
 
         VERSION="$BASE_VERSION"
         ATTEMPT=0
@@ -56,7 +61,12 @@ runs:
         TAG="pr-$PR"
         PACKAGE_ID="$PKG_NAME@$VERSION"
 
-        echo "📦 Final resolved version: $VERSION"
+        echo "📦 Final resolved version: $PKG_NAME@$VERSION"
+
+        if [[ -n "$PR" ]]; then
+          echo ""
+          echo "🏷 Pull Request Tag: $PKG_NAME@$TAG"
+        fi
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
         echo "package=$PKG_NAME" >> "$GITHUB_OUTPUT"
