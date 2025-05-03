@@ -51,7 +51,7 @@ runs:
       shell: bash
       run: |
         PKG=$(jq -r .name package.json)
-        VERSION="${{ steps.meta.outputs.VERSION }}"
+        VERSION="${{ steps.meta.outputs.version }}"
 
         echo "### 📦 npm Package Published" >> $GITHUB_STEP_SUMMARY
         echo "- Version: \`${VERSION}\`" >> $GITHUB_STEP_SUMMARY
