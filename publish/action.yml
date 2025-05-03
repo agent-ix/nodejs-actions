@@ -57,13 +57,11 @@ runs:
           ATTEMPT=$((ATTEMPT + 1))
           VERSION="$BASE_VERSION.$ATTEMPT"
         done
-
-        TAG="pr-$PR"
         PACKAGE_ID="$PKG_NAME@$VERSION"
-
-        echo "📦 Final resolved version: $PKG_NAME@$VERSION"
+        echo "📦 Final resolved version: $PACKAGE_ID"
 
         if [[ -n "$PR" ]]; then
+          TAG="pr-$PR"
           echo ""
           echo "🏷 Pull Request Tag: $PKG_NAME@$TAG"
         fi
@@ -87,16 +85,15 @@ runs:
       run: |
         mkdir -p logs/npm
         docker compose run --rm \
-          -e VERSION="${{ steps.meta.outputs.version }}" \
           -e TAG="${{ steps.meta.outputs.tag }}" \
-          -e PKG_NAME="${{ steps.meta.outputs.package }}" \
+          -e $PACKAGE_ID="${{ steps.meta.outputs.package }}" \
           -v "$(pwd)/logs/npm:/root/.npm/_logs" \
           dev bash -c '
             echo "//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
-
-            echo "📦 Publishing $PKG_NAME@$VERSION with tag $TAG"
             npm publish --no-git-checks
-            npm dist-tag add "$PKG_NAME@$VERSION" "$TAG"
+            if [[ -n "$TAG" ]]; then
+              npm dist-tag add "$PACKAGE_ID" "$TAG"
+            fi
           '
 
     - name: Upload npm debug logs
