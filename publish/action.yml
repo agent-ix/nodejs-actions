@@ -87,10 +87,9 @@ runs:
         mkdir -p logs/npm
         docker compose run --rm \
           -e TAG="${{ steps.meta.outputs.tag }}" \
-          -e $PACKAGE_ID="${{ steps.meta.outputs.package }}" \
+          -e PACKAGE_ID="${{ steps.meta.outputs.package_id }}" \
           -v "$(pwd)/logs/npm:/root/.npm/_logs" \
           dev bash -c '
-            echo "//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
             npm publish --no-git-checks
             if [[ -n "$TAG" ]]; then
               npm dist-tag add "$PACKAGE_ID" "$TAG"
