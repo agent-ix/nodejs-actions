@@ -44,17 +44,18 @@ runs:
         mkdir -p logs/npm
         docker compose run --rm \
           -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
+          -e PR_NUMBER="${{ github.event.pull_request.number }}" \
+          -e VERSION="${{ steps.image.outputs.version }}" \
           -v "$(pwd)/logs/npm:/root/.npm/_logs" \
           dev bash -c '
             echo "//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
 
-            PR="${{ github.event.pull_request.number }}"
-            VERSION="${{ steps.image.outputs.version }}"
-            TAG="pr-$PR"
+            TAG="pr-$PR_NUMBER"
             PKG_NAME=$(node -p "require(\"./package.json\").name")
 
             echo "📦 Publishing $PKG_NAME@$VERSION with tag $TAG"
-            npm publish --tag "$TAG" --no-git-checks
+            npm publish --no-git-checks
+            npm dist-tag add "$PKG_NAME@$VERSION" "$TAG"
           '
 
     - name: Upload npm debug logs
