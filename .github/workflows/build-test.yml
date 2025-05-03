@@ -36,7 +36,7 @@ jobs:
         with:
           registry: ${{ inputs.registry }}
           repository: ${{ inputs.repository }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.REGISTRY_PASSWORD }}
 
   build:
     runs-on: ubuntu-latest
