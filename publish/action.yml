@@ -73,22 +73,23 @@ runs:
         PKG_NAME=$(node -p "require('./package.json').name")
 
         echo "### 📦 npm Package Published" >> $GITHUB_STEP_SUMMARY
+        echo "- Name: \`$PKG_NAME\`" >> $GITHUB_STEP_SUMMARY
         echo "- Version: \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Registry: [https://npm.pkg.github.com](https://npm.pkg.github.com)" >> $GITHUB_STEP_SUMMARY
-        echo "- Package ID:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        echo "### Package ID:" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo "$PKG_NAME@$VERSION" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
 
+        echo "### Install:" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- 🎯 Example install (specific version):" >> $GITHUB_STEP_SUMMARY
+        echo "🎯 specific version:" >> $GITHUB_STEP_SUMMARY
         echo '```bash' >> $GITHUB_STEP_SUMMARY
         echo "npm install $PKG_NAME@$VERSION" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
 
-        echo "- 🔄 Example install (floating PR tag):" >> $GITHUB_STEP_SUMMARY
+        echo "🔄 floating PR tag:" >> $GITHUB_STEP_SUMMARY
         echo '```bash' >> $GITHUB_STEP_SUMMARY
         echo "npm install $PKG_NAME@$TAG" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-
-        echo "- [View package](https://github.com/orgs/${{ github.repository_owner }}/packages?repo_name=${{ github.event.repository.name }})" >> $GITHUB_STEP_SUMMARY
