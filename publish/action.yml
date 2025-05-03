@@ -41,8 +41,10 @@ runs:
     - name: Publish to npm
       shell: bash
       run: |
+        mkdir -p logs/npm
         docker compose run --rm \
           -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
+          -v "$(pwd)/logs/npm:/root/.npm/_logs" \
           dev bash -c '
             echo "//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
 
@@ -54,6 +56,13 @@ runs:
             echo "📦 Publishing $PKG_NAME@$VERSION with tag $TAG"
             npm publish --tag "$TAG" --no-git-checks
           '
+
+    - name: Upload npm debug logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: publish-npm-logs
+        path: logs/npm/
 
     - name: Write summary
       shell: bash
