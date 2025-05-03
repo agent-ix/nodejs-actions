@@ -41,15 +41,13 @@ runs:
         path: prettier.txt
 
     - name: Add summary
-      if: always()
-      shell: bash
-      run: |
-        if [ "${{ steps.prettier.outcome }}" == "success" ]; then
-          echo '### ✨ Prettier complete' >> $GITHUB_STEP_SUMMARY
-        else
-          echo '### ✨ Prettier Report' >> $GITHUB_STEP_SUMMARY
-          cat prettier.txt | tee /dev/stderr >> $GITHUB_STEP_SUMMARY
-        fi
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.prettier.outcome }}" != "success" ]; then
+            echo '### ❌ Prettier Report' >> $GITHUB_STEP_SUMMARY
+            cat prettier.txt | tee /dev/stderr >> $GITHUB_STEP_SUMMARY
+          fi
 
     - name: Fail if Prettier failed
       if: steps.prettier.outcome != 'success'

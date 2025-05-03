@@ -1,43 +1,55 @@
 name: "Run Jest"
-description: "Runs Jest tests inside a Docker container"
+      description: "Runs Jest tests inside a Docker container"
 
-inputs:
-  registry_user:
-    description: "Registry username"
-    required: true
-  registry_password:
-    description: "Registry password"
-    required: true
-  artifact:
-    description: "Path to image.json"
-    required: false
-    default: "image.json"
+      inputs:
+        registry_user:
+          description: "Registry username"
+          required: true
+        registry_password:
+          description: "Registry password"
+          required: true
+        artifact:
+          description: "Path to image.json"
+          required: false
+          default: "image.json"
 
-runs:
-  using: "composite"
-  steps:
-    - uses: actions/checkout@v4
+      runs:
+        using: "composite"
+        steps:
+          - uses: actions/checkout@v4
 
-    - uses: agent-ix/docker-actions/pull@main
-      id: image
-      with:
-        artifact: ${{ inputs.artifact }}
-        registry_user: ${{ inputs.registry_user }}
-        registry_password: ${{ inputs.registry_password }}
+          - uses: agent-ix/docker-actions/pull@main
+            id: image
+            with:
+              artifact: ${{ inputs.artifact }}
+              registry_user: ${{ inputs.registry_user }}
+              registry_password: ${{ inputs.registry_password }}
 
-    - name: Run Jest
-      shell: bash
-      run: |
-        docker compose run --rm dev pnpm jest
+          - name: Run Jest
+            id: jest
+            shell: bash
+            continue-on-error: true
+            run: |
+              set -o pipefail
+              docker compose run --rm dev pnpm jest 2>&1 | tee jest.txt
 
-    - name: Upload summary
-      shell: bash
-      run: |
-        echo "✅ Jest complete" >> $GITHUB_STEP_SUMMARY
-        mkdir -p results
-        echo '{"status":"ok"}' > results/jest.json
+          - name: Upload Jest output
+            if: always()
+            uses: actions/upload-artifact@v4
+            with:
+              name: jest.txt
+              path: jest.txt
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: jest.json
-        path: results/jest.json
+          - name: Add summary
+            if: always()
+            shell: bash
+            run: |
+              if [ "${{ steps.jest.outcome }}" != "success" ]; then
+                echo '### ❌ Jest Report' >> $GITHUB_STEP_SUMMARY
+                cat jest.txt | tee /dev/stderr >> $GITHUB_STEP_SUMMARY
+              fi
+
+          - name: Fail if Jest failed
+            if: steps.jest.outcome != 'success'
+            shell: bash
+            run: exit 1

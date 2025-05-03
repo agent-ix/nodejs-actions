@@ -26,18 +26,30 @@ runs:
         registry_password: ${{ inputs.registry_password }}
 
     - name: Run ESLint
+      id: eslint
       shell: bash
+      continue-on-error: true
       run: |
-        docker compose run --rm dev pnpm eslint
+        set -o pipefail
+        docker compose run --rm dev pnpm eslint 2>&1 | tee eslint.txt
 
-    - name: Upload summary
-      shell: bash
-      run: |
-        echo "✅ ESLint complete" >> $GITHUB_STEP_SUMMARY
-        mkdir -p results
-        echo '{"status":"ok"}' > results/eslint.json
-
-    - uses: actions/upload-artifact@v4
+    - name: Upload ESLint output
+      if: always()
+      uses: actions/upload-artifact@v4
       with:
-        name: eslint.json
-        path: results/eslint.json
+        name: eslint.txt
+        path: eslint.txt
+
+    - name: Add summary
+      if: always()
+      shell: bash
+      run: |
+        if [ "${{ steps.eslint.outcome }}" != "success" ]; then
+          echo '### ❌ ESLint Report' >> $GITHUB_STEP_SUMMARY
+          cat eslint.txt | tee /dev/stderr >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Fail if ESLint failed
+      if: steps.eslint.outcome != 'success'
+      shell: bash
+      run: exit 1
