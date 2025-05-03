@@ -67,10 +67,11 @@ runs:
 
     - name: Publish to npm
       shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.token }}
       run: |
         mkdir -p logs/npm
         docker compose run --rm \
-          -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
           -e VERSION="${{ steps.meta.outputs.version }}" \
           -e TAG="${{ steps.meta.outputs.tag }}" \
           -e PKG_NAME="${{ steps.meta.outputs.package }}" \
