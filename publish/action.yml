@@ -41,11 +41,14 @@ runs:
     - name: Publish to npm
       shell: bash
       run: |
+        echo "//npm.pkg.github.com/:_authToken=${{ inputs.token }}" >> .npmrc
         docker compose run --rm \
           -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
-          dev /bin/bash -c "echo '//npm.pkg.github.com/:_authToken=\$NODE_AUTH_TOKEN' > ~/.npmrc && npm publish \
-          --tag pr-${{ steps.image.outputs.version }} \
-          --no-git-checks"
+          -e NPM_CONFIG_USERCONFIG=/app/.npmrc \
+          dev bash -c "
+            npm publish --tag pr-${{ steps.image.outputs.version }} --no-git-checks && \
+            PKG_NAME=\$(jq -r .name package.json) && \
+            npm dist-tag add \$PKG_NAME@${{ steps.image.outputs.version }} pr-${{ github.event.pull_request.number }}"
 
     - name: Write summary
       shell: bash
