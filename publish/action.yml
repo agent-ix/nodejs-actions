@@ -58,27 +58,28 @@ runs:
     - name: Write summary
       shell: bash
       run: |
-        PKG=$(jq -r .name package.json)
+        PR="${{ github.event.pull_request.number }}"
         VERSION="${{ steps.image.outputs.version }}"
+        TAG="pr-$PR"
+        PKG_NAME=$(node -p "require('./package.json').name")
 
         echo "### 📦 npm Package Published" >> $GITHUB_STEP_SUMMARY
-        echo "- Version: \`${VERSION}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Registry: \`${{ inputs.registry }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Version: \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Registry: [https://npm.pkg.github.com](https://npm.pkg.github.com)" >> $GITHUB_STEP_SUMMARY
         echo "- Package ID:" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-        echo "${PKG}@${VERSION}" >> $GITHUB_STEP_SUMMARY
+        echo "$PKG_NAME@$VERSION" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
 
-        if [[ "${{ inputs.registry }}" == *"github.com"* ]]; then
-          INSTALL_URL="@${{ github.repository_owner }}/$PKG"
-          REGISTRY_URL="https://github.com/${{ github.repository_owner }}/packages"
-        else
-          INSTALL_URL="$PKG@${VERSION}"
-          REGISTRY_URL="https://www.npmjs.com/package/$PKG/v/${VERSION}"
-        fi
-
-        echo "- Example install:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎯 Example install (specific version):" >> $GITHUB_STEP_SUMMARY
         echo '```bash' >> $GITHUB_STEP_SUMMARY
-        echo "npm install $INSTALL_URL" >> $GITHUB_STEP_SUMMARY
+        echo "npm install $PKG_NAME@$VERSION" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-        echo "- [View package]($REGISTRY_URL)" >> $GITHUB_STEP_SUMMARY
+
+        echo "- 🔄 Example install (floating PR tag):" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo "npm install $PKG_NAME@$TAG" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+        echo "- [View package](https://github.com/orgs/${{ github.repository_owner }}/packages?repo_name=${{ github.event.repository.name }})" >> $GITHUB_STEP_SUMMARY
