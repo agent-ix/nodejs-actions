@@ -41,6 +41,7 @@ runs:
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.token }}
+        GH_TOKEN: ${{ inputs.registry_password }}
       run: |
         PR=$(gh pr list --state open --json number,headRefOid \
           --jq ".[] | select(.headRefOid == \"${{ github.sha }}\") | .number")
