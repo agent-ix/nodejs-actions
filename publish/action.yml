@@ -31,10 +31,35 @@ runs:
         registry_user: ${{ inputs.registry_user }}
         registry_password: ${{ inputs.registry_password }}
 
+    - name: Resolve publish metadata
+      id: meta
+      shell: bash
+      run: |
+        PR="${{ github.event.pull_request.number }}"
+        BASE_VERSION="${{ steps.image.outputs.version }}"
+        PKG_NAME=$(node -p "require('./package.json').name")
+
+        VERSION="$BASE_VERSION"
+        ATTEMPT=0
+        while npm view "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
+          ATTEMPT=$((ATTEMPT + 1))
+          VERSION="$BASE_VERSION.$ATTEMPT"
+        done
+
+        TAG="pr-$PR"
+        PACKAGE_ID="$PKG_NAME@$VERSION"
+
+        echo "📦 Final resolved version: $VERSION"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        echo "package=$PKG_NAME" >> "$GITHUB_OUTPUT"
+        echo "package_id=$PACKAGE_ID" >> "$GITHUB_OUTPUT"
+        echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
     - name: Inject version into package.json
       shell: bash
       run: |
-        jq --arg version "${{ steps.image.outputs.version }}" \
+        jq --arg version "${{ steps.meta.outputs.version }}" \
         '.version = $version' package.json > tmp \
         && mv tmp package.json
 
@@ -44,14 +69,12 @@ runs:
         mkdir -p logs/npm
         docker compose run --rm \
           -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
-          -e PR_NUMBER="${{ github.event.pull_request.number }}" \
-          -e VERSION="${{ steps.image.outputs.version }}" \
+          -e VERSION="${{ steps.meta.outputs.version }}" \
+          -e TAG="${{ steps.meta.outputs.tag }}" \
+          -e PKG_NAME="${{ steps.meta.outputs.package }}" \
           -v "$(pwd)/logs/npm:/root/.npm/_logs" \
           dev bash -c '
             echo "//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
-
-            TAG="pr-$PR_NUMBER"
-            PKG_NAME=$(node -p "require(\"./package.json\").name")
 
             echo "📦 Publishing $PKG_NAME@$VERSION with tag $TAG"
             npm publish --no-git-checks
@@ -68,10 +91,10 @@ runs:
     - name: Write summary
       shell: bash
       run: |
-        PR="${{ github.event.pull_request.number }}"
-        VERSION="${{ steps.image.outputs.version }}"
-        TAG="pr-$PR"
-        PKG_NAME=$(node -p "require('./package.json').name")
+        VERSION="${{ steps.meta.outputs.version }}"
+        TAG="${{ steps.meta.outputs.tag }}"
+        PKG_NAME="${{ steps.meta.outputs.package }}"
+        PACKAGE_ID="${{ steps.meta.outputs.package_id }}"
 
         echo "### 📦 npm Package Published" >> $GITHUB_STEP_SUMMARY
         echo "- Name: \`$PKG_NAME\`" >> $GITHUB_STEP_SUMMARY
@@ -80,14 +103,14 @@ runs:
 
         echo "### Package ID:" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-        echo "$PKG_NAME@$VERSION" >> $GITHUB_STEP_SUMMARY
+        echo "$PACKAGE_ID" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
 
         echo "### Install:" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "🎯 specific version:" >> $GITHUB_STEP_SUMMARY
         echo '```bash' >> $GITHUB_STEP_SUMMARY
-        echo "npm install $PKG_NAME@$VERSION" >> $GITHUB_STEP_SUMMARY
+        echo "npm install $PACKAGE_ID" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
 
         echo "🔄 floating PR tag:" >> $GITHUB_STEP_SUMMARY
