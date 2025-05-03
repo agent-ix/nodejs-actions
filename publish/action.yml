@@ -49,7 +49,7 @@ runs:
             PR="${{ github.event.pull_request.number }}"
             VERSION="${{ steps.image.outputs.version }}"
             TAG="pr-$PR"
-            PKG_NAME=$(node -p "require('./package.json').name")
+            PKG_NAME=$(node -p "require(\"./package.json\").name")
 
             echo "📦 Publishing $PKG_NAME@$VERSION with tag $TAG"
             npm publish --tag "$TAG" --no-git-checks
