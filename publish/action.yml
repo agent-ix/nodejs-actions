@@ -44,14 +44,14 @@ runs:
         docker compose run --rm \
           -e NODE_AUTH_TOKEN="${{ inputs.token }}" \
           dev /bin/bash -c "echo '//npm.pkg.github.com/:_authToken=\$NODE_AUTH_TOKEN' > ~/.npmrc && npm publish \
-          --tag ${{ steps.version.outputs.version }} \
+          --tag pr-${{ steps.image.outputs.version }} \
           --no-git-checks"
 
     - name: Write summary
       shell: bash
       run: |
         PKG=$(jq -r .name package.json)
-        VERSION="${{ steps.meta.outputs.version }}"
+        VERSION="${{ steps.image.outputs.version }}"
 
         echo "### 📦 npm Package Published" >> $GITHUB_STEP_SUMMARY
         echo "- Version: \`${VERSION}\`" >> $GITHUB_STEP_SUMMARY
