@@ -36,18 +36,18 @@ runs:
         node-version: '22.x'
         registry-url: 'https://npm.pkg.github.com'
 
-    - name: Resolve publish metadata
-      id: meta
+    - name: Get PR
+      id: get_pr
+      uses: agent-ix/git-actions/get-pr@main
+      with:
+        GITHUB_TOKEN: ${{ inputs.registry_password }}
+
+    - name: Resolve latest version
+      id: version
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.token }}
-        GH_TOKEN: ${{ inputs.registry_password }}
       run: |
-        PR=$(gh pr list --state open --json number,headRefOid \
-          --jq ".[] | select(.headRefOid == \"${{ github.sha }}\") | .number")
-        echo "Found PR: $PR"
-        echo "pr=$PR" >> "$GITHUB_OUTPUT"
-
         BASE_VERSION="${{ steps.image.outputs.version }}"
         PKG_NAME=$(node -p "require('./package.json').name")
         echo "📦 Base version: $BASE_VERSION"
@@ -61,15 +61,19 @@ runs:
         PACKAGE_ID="$PKG_NAME@$VERSION"
         echo "📦 Final resolved version: $PACKAGE_ID"
 
+    - name: Resolve dist-tags
+      id: meta
+      shell: bash
+      run: |
+        PR="${{ steps.get_pr.outputs.pr }}"
+        PKG_NAME="${{ steps.image.outputs.package }}"
+
         if [[ -n "$PR" ]]; then
           TAG="pr-$PR"
           echo ""
           echo "🏷 Pull Request Tag: $PKG_NAME@$TAG"
         fi
-        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-        echo "package=$PKG_NAME" >> "$GITHUB_OUTPUT"
-        echo "package_id=$PACKAGE_ID" >> "$GITHUB_OUTPUT"
         echo "pr=$PR" >> "$GITHUB_OUTPUT"
 
     - name: Inject version into package.json
