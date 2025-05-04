@@ -59,6 +59,7 @@ runs:
           VERSION="$BASE_VERSION.$ATTEMPT"
         done
         PACKAGE_ID="$PKG_NAME@$VERSION"
+        echo "package=$PKG_NAME" >> "$GITHUB_OUTPUT"
         echo "📦 Final resolved version: $PACKAGE_ID"
 
     - name: Resolve dist-tags
