@@ -59,15 +59,17 @@ runs:
           VERSION="$BASE_VERSION.$ATTEMPT"
         done
         PACKAGE_ID="$PKG_NAME@$VERSION"
-        echo "package=$PKG_NAME" >> "$GITHUB_OUTPUT"
         echo "📦 Final resolved version: $PACKAGE_ID"
+        echo "package=$PKG_NAME" >> "$GITHUB_OUTPUT"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "package_id=$PACKAGE_ID" >> "$GITHUB_OUTPUT"
 
     - name: Resolve dist-tags
       id: meta
       shell: bash
       run: |
         PR="${{ steps.get_pr.outputs.pr }}"
-        PKG_NAME="${{ steps.image.outputs.package }}"
+        PKG_NAME="${{ steps.version.outputs.package }}"
 
         if [[ -n "$PR" ]]; then
           TAG="pr-$PR"
@@ -92,7 +94,7 @@ runs:
         mkdir -p logs/npm
         docker compose run --rm \
           -e TAG="${{ steps.meta.outputs.tag }}" \
-          -e PACKAGE_ID="${{ steps.meta.outputs.package_id }}" \
+          -e PACKAGE_ID="${{ steps.version.outputs.package_id }}" \
           -v "$(pwd)/logs/npm:/root/.npm/_logs" \
           dev bash -c '
             npm publish --no-git-checks
@@ -111,10 +113,10 @@ runs:
     - name: Write summary
       shell: bash
       run: |
-        VERSION="${{ steps.meta.outputs.version }}"
+        VERSION="${{ steps.version.outputs.version }}"
         TAG="${{ steps.meta.outputs.tag }}"
-        PKG_NAME="${{ steps.meta.outputs.package }}"
-        PACKAGE_ID="${{ steps.meta.outputs.package_id }}"
+        PKG_NAME="${{ steps.version.outputs.package }}"
+        PACKAGE_ID="${{ steps.version.outputs.package_id }}"
 
         echo "### 📦 npm Package Published" >> $GITHUB_STEP_SUMMARY
         echo "- Name: \`$PKG_NAME\`" >> $GITHUB_STEP_SUMMARY
