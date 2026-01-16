@@ -18,6 +18,9 @@ inputs:
   registry_password:
     description: "Registry password"
     required: true
+  GITHUB_TOKEN:
+    description: "GitHub token for API calls (e.g. get-pr)"
+    required: true
 
 runs:
   using: "composite"
@@ -34,13 +37,13 @@ runs:
     - uses: actions/setup-node@v4
       with:
         node-version: '22.x'
-        registry-url: 'https://npm.pkg.github.com'
+        registry-url: ${{ inputs.registry }}
 
     - name: Get PR
       id: get_pr
       uses: agent-ix/git-actions/get-pr@main
       with:
-        GITHUB_TOKEN: ${{ inputs.registry_password }}
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
 
     - name: Resolve latest version
       id: version
