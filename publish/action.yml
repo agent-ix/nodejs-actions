@@ -5,21 +5,21 @@ inputs:
   artifact:
     description: "Path to image.json containing the image reference"
     required: true
-  token:
-    description: "NPM auth token (must have write access)"
+  docker_registry_user:
+    description: "Docker registry username"
     required: true
-  registry:
-    description: "Registry URL for publishing (e.g., https://npm.pkg.github.com)"
+  docker_registry_password:
+    description: "Docker registry password"
+    required: true
+  npm_registry:
+    description: "NPM registry URL"
     required: false
     default: "https://npm.pkg.github.com"
-  registry_user:
-    description: "Registry username"
+  npm_registry_token:
+    description: "NPM auth token"
     required: true
-  registry_password:
-    description: "Registry password"
-    required: true
-  GITHUB_TOKEN:
-    description: "GitHub token for API calls (e.g. get-pr)"
+  github_token:
+    description: "GitHub token for API calls"
     required: true
 
 runs:
@@ -31,25 +31,25 @@ runs:
       id: image
       with:
         artifact: ${{ inputs.artifact }}
-        registry_user: ${{ inputs.registry_user }}
-        registry_password: ${{ inputs.registry_password }}
+        registry_user: ${{ inputs.docker_registry_user }}
+        registry_password: ${{ inputs.docker_registry_password }}
 
     - uses: actions/setup-node@v4
       with:
         node-version: '22.x'
-        registry-url: ${{ inputs.registry }}
+        registry-url: ${{ inputs.npm_registry }}
 
     - name: Get PR
       id: get_pr
       uses: agent-ix/git-actions/get-pr@main
       with:
-        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
 
     - name: Resolve latest version
       id: version
       shell: bash
       env:
-        NODE_AUTH_TOKEN: ${{ inputs.token }}
+        NODE_AUTH_TOKEN: ${{ inputs.npm_registry_token }}
       run: |
         BASE_VERSION="${{ steps.image.outputs.version }}"
         PKG_NAME=$(node -p "require('./package.json').name")
@@ -92,7 +92,7 @@ runs:
     - name: Publish to npm
       shell: bash
       env:
-        NODE_AUTH_TOKEN: ${{ inputs.token }}
+        NODE_AUTH_TOKEN: ${{ inputs.npm_registry_token }}
       run: |
         mkdir -p logs/npm
         docker compose run --rm \

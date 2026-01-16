@@ -2,11 +2,11 @@ name: "Run Jest"
 description: "Runs Jest tests inside a Docker container"
 
 inputs:
-  registry_user:
-    description: "Registry username"
+  docker_registry_user:
+    description: "Docker registry username for pulling images"
     required: true
-  registry_password:
-    description: "Registry password"
+  docker_registry_password:
+    description: "Docker registry password for pulling images"
     required: true
   artifact:
     description: "Path to image.json"
@@ -22,8 +22,8 @@ runs:
       id: image
       with:
         artifact: ${{ inputs.artifact }}
-        registry_user: ${{ inputs.registry_user }}
-        registry_password: ${{ inputs.registry_password }}
+        registry_user: ${{ inputs.docker_registry_user }}
+        registry_password: ${{ inputs.docker_registry_password }}
 
     - name: Run Jest
       id: jest

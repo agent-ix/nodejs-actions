@@ -2,13 +2,14 @@ name: "Image Metadata"
 description: "Generates image.json for dev container"
 
 inputs:
-  registry:
+  docker_registry:
     required: false
     type: string
     default: ghcr.io
-  repository:
+    description: "Docker registry host"
+  docker_repository:
     required: true
-    description: "Docker image name (e.g. org/service)"
+    description: "Docker image repository (e.g. org/service)"
   artifact:
     required: false
     default: "image.json"
@@ -16,7 +17,7 @@ inputs:
   tag_prefix:
     required: false
     description: "Optional prefix to prepend to tag (e.g. dev, base)"
-  GITHUB_TOKEN:
+  github_token:
     description: "GitHub token for authentication"
     required: true
 
@@ -46,10 +47,10 @@ runs:
       id: meta
       uses: agent-ix/docker-actions/create-metadata@main
       with:
-        registry: ${{ inputs.registry }}
-        repository: ${{ inputs.repository }}
+        registry: ${{ inputs.docker_registry }}
+        repository: ${{ inputs.docker_repository }}
         version: ${{ steps.data.outputs.version }}
         description: ${{ steps.data.outputs.description }}
         artifact: ${{ inputs.artifact }}
         tag_prefix: ${{ inputs.tag_prefix }}
-        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}

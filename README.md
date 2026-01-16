@@ -12,22 +12,24 @@
 Generates `image.json` metadata including tag and description from project state.
 
 **Inputs:**
-| Name       | Description                              | Required | Default      |
-|------------|------------------------------------------|----------|--------------|
-| `image`    | Image name (e.g., org/pkg)               | ✅        | —            |
-| `registry` | Docker registry (e.g., ghcr.io)          | ❌        | `ghcr.io`    |
-| `artifact` | Output filename                          | ❌        | `image.json` |
+| Name               | Description                              | Required | Default      |
+|--------------------|------------------------------------------|----------|--------------|
+| `docker_repository`| Docker image repository (e.g., org/pkg)  | ✅        | —            |
+| `docker_registry`  | Docker registry host                     | ❌        | `ghcr.io`    |
+| `artifact`         | Output filename                          | ❌        | `image.json` |
+| `github_token`     | GitHub token for authentication          | ✅        | —            |
 
 **Outputs:**
 | Name         | Description               |
 |--------------|---------------------------|
-| `image_tag`  | Resolved image tag value  |
+| `version`    | Resolved version          |
+| `url`        | Fully qualified image URL |
+| `image`      | Image path without tag    |
 
 **Behavior:**
 - Runs `make version` to compute semver-compatible tag
 - Reads `.description` from `package.json`
-- Constructs metadata JSON:
-  - `tag`, `image`, `url`, `version`, `description`, `registry`, `repository`, `source`
+- Constructs metadata JSON via `docker-actions/create-metadata`
 
 ---
 
@@ -37,15 +39,16 @@ Generates `image.json` metadata including tag and description from project state
 Runs tests using Jest inside a Docker container using a previously-built image.
 
 **Inputs:**
-| Name           | Description                       | Required | Default       |
-|----------------|-----------------------------------|----------|---------------|
-| `artifact`     | Path to image.json                | ✅        | —             |
-| `test_command` | Command inside container          | ❌        | `pnpm test`   |
+| Name                      | Description                           | Required | Default       |
+|---------------------------|---------------------------------------|----------|---------------|
+| `docker_registry_user`    | Docker registry username              | ✅        | —             |
+| `docker_registry_password`| Docker registry password              | ✅        | —             |
+| `artifact`                | Path to image.json                    | ❌        | `image.json`  |
 
 **Behavior:**
-- Pulls and runs container
-- Executes tests in project directory
-- Uploads `jest.json` with dummy result and adds summary
+- Pulls dev image from registry
+- Runs `pnpm jest` in container
+- Uploads `jest.txt` and adds step summary
 
 ---
 
@@ -55,32 +58,35 @@ Runs tests using Jest inside a Docker container using a previously-built image.
 Runs ESLint inside the service container.
 
 **Inputs:**
-| Name           | Description                       | Required | Default       |
-|----------------|-----------------------------------|----------|---------------|
-| `artifact`     | Path to image.json                | ✅        | —             |
-| `lint_command` | ESLint command                    | ❌        | `pnpm lint`   |
+| Name                      | Description                           | Required | Default       |
+|---------------------------|---------------------------------------|----------|---------------|
+| `docker_registry_user`    | Docker registry username              | ✅        | —             |
+| `docker_registry_password`| Docker registry password              | ✅        | —             |
+| `artifact`                | Path to image.json                    | ❌        | `image.json`  |
 
 **Behavior:**
-- Pulls container
-- Runs ESLint with provided command
-- Writes lint output to `eslint.json` and step summary
+- Pulls dev image from registry
+- Runs `pnpm eslint` in container
+- Uploads `eslint.txt` and adds step summary
 
 ---
 
 ### 🎨 `prettier`
 **Path:** `prettier/action.yml`
 
-Formats code using Prettier inside the container.
+Checks code formatting using Prettier inside the container.
 
 **Inputs:**
-| Name               | Description                      | Required | Default            |
-|--------------------|----------------------------------|----------|--------------------|
-| `artifact`         | Path to image.json               | ✅        | —                  |
-| `format_command`   | Prettier command                 | ❌        | `pnpm format`      |
+| Name                      | Description                           | Required | Default       |
+|---------------------------|---------------------------------------|----------|---------------|
+| `docker_registry_user`    | Docker registry username              | ✅        | —             |
+| `docker_registry_password`| Docker registry password              | ✅        | —             |
+| `artifact`                | Path to image.json                    | ❌        | `image.json`  |
 
 **Behavior:**
-- Runs container with formatting command
-- Output goes to summary and `prettier.json` result
+- Pulls dev image from registry
+- Runs `pnpm prettier --check .` in container
+- Uploads `prettier.txt` and adds step summary
 
 ---
 
@@ -90,15 +96,21 @@ Formats code using Prettier inside the container.
 Publishes the Node.js package using the version from `image.json`.
 
 **Inputs:**
-| Name           | Description                          | Required | Default       |
-|----------------|--------------------------------------|----------|---------------|
-| `artifact`     | Path to image.json                   | ✅        | —             |
-| `registry`     | Registry (e.g., https://npm.pkg...) | ❌        | —             |
-| `token`        | Auth token (e.g., NPM_TOKEN)         | ✅        | —             |
+| Name                      | Description                           | Required | Default                      |
+|---------------------------|---------------------------------------|----------|------------------------------|
+| `artifact`                | Path to image.json                    | ✅        | —                            |
+| `docker_registry_user`    | Docker registry username              | ✅        | —                            |
+| `docker_registry_password`| Docker registry password              | ✅        | —                            |
+| `npm_registry`            | NPM registry URL                      | ❌        | `https://npm.pkg.github.com` |
+| `npm_registry_token`      | NPM auth token                        | ✅        | —                            |
+| `github_token`            | GitHub token for API calls            | ✅        | —                            |
 
 **Behavior:**
-- Reads tag from metadata
-- Publishes via `npm publish` with correct tag
+- Pulls dev image from Docker registry
+- Resolves version from image metadata
+- Gets PR number for dist-tag
+- Publishes via `npm publish` with resolved version
+- Adds PR dist-tag if applicable
 
 ---
 
@@ -107,56 +119,30 @@ Publishes the Node.js package using the version from `image.json`.
 ### 🧪 `build-test.yml`
 **Path:** `.github/workflows/build-test.yml`
 
+Complete CI workflow for Node.js projects.
+
 **Inputs:**
-| Name       | Description                            | Required | Default     |
-|------------|----------------------------------------|----------|-------------|
-| `image`    | Docker image name (`org/myapp`)        | ✅        | —           |
-| `registry` | Docker registry (e.g. `ghcr.io`)        | ❌        | `ghcr.io`   |
-| `npm`    | npm registry        | ✅        | —           |
+| Name               | Description                            | Required | Default                      |
+|--------------------|----------------------------------------|----------|------------------------------|
+| `docker_repository`| Docker image repository                | ✅        | —                            |
+| `docker_registry`  | Docker registry host                   | ❌        | `ghcr.io`                    |
+| `npm_registry`     | NPM registry URL                       | ❌        | `https://npm.pkg.github.com` |
 
 **Secrets:**
-| Name               | Description                   | Required |
-|--------------------|-------------------------------|----------|
-| `REGISTRY_USER`    | Docker registry username       | ✅        |
-| `REGISTRY_PASSWORD`| Docker registry password       | ✅        |
-| `NPM_TOKEN`        | Token for npm publish          | ✅        |
+| Name                      | Description                   | Required |
+|---------------------------|-------------------------------|----------|
+| `DOCKER_REGISTRY_USER`    | Docker registry username      | ✅        |
+| `DOCKER_REGISTRY_PASSWORD`| Docker registry password      | ✅        |
+| `NPM_REGISTRY_TOKEN`      | NPM registry auth token       | ✅        |
+| `GITHUB_TOKEN`            | GitHub token for API calls    | ✅        |
 
-**Behavior:**
-- Generates `image.json` using `image-metadata`
-- Builds Docker image with external `build-image` action
-- publishes package to npm
-- Runs:
-  - Jest tests via `jest` action
-  - Linting via `eslint` action
-  - Code formatting via `prettier` action
-
-
-**Path:** `.github/workflows/release.yml`
-
-**Inputs:**
-| Name       | Description                    | Required | Default       |
-|------------|--------------------------------|----------|----------------|
-| `artifact` | Name of image metadata file   | ✅        | `image.json`   |
-
-- Uses `pnpm` and GitHub’s npm registry by default
-- Runs:
-  1. Docker image build + push (delegated)
-  2. `publish` with resolved tag from `image.json`
-
-- Requires `artifact`
-- Runs:
-  1. Docker image build + push (external)
-  2. `publish` with npm token
-
----
-
-## 🔐 Required Secrets
-
-| Secret       | Required By | Purpose                 |
-|--------------|-------------|-------------------------|
-| `NPM_TOKEN`  | publish     | Publish to npm registry |
-
-All secrets must be passed via workflow `env:` blocks.
+**Jobs:**
+1. **metadata** - Generate image.json
+2. **build** - Build Docker image
+3. **jest** - Run tests
+4. **eslint** - Run linting
+5. **prettier** - Check formatting
+6. **publish** - Publish to npm registry
 
 ---
 
@@ -183,15 +169,18 @@ name: NodeJS CI/CD
 on:
   push:
     branches: [main]
+  pull_request:
 
 jobs:
   build-test:
-    uses: org/nodejs-actions/.github/workflows/build-test.yml@main
+    uses: agent-ix/nodejs-actions/.github/workflows/build-test.yml@main
     with:
-      image: org/my-app
-      registry: ghcr.io
+      docker_repository: ${{ github.repository }}
+      # docker_registry: ghcr.io  (default)
+      # npm_registry: https://npm.pkg.github.com  (default)
     secrets:
-      REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      DOCKER_REGISTRY_USER: ${{ github.actor }}
+      DOCKER_REGISTRY_PASSWORD: ${{ secrets.REGISTRY_TOKEN }}
+      NPM_REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
 ```

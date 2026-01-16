@@ -3,27 +3,32 @@ name: CI
 on:
   workflow_call:
     inputs:
-      repository:
-        description: "Docker image name (e.g. my-org/myapp)"
+      docker_repository:
+        description: "Docker image repository (e.g. my-org/myapp)"
         required: true
         type: string
-      registry:
+      docker_registry:
+        description: "Docker registry host"
         required: false
         type: string
         default: ghcr.io
-      npm:
+      npm_registry:
         description: "NPM registry URL"
-        required: true
+        required: false
         type: string
+        default: "https://npm.pkg.github.com"
     secrets:
-      REGISTRY_USER:
+      DOCKER_REGISTRY_USER:
         description: "Docker registry username"
         required: true
-      REGISTRY_PASSWORD:
+      DOCKER_REGISTRY_PASSWORD:
         description: "Docker registry password"
         required: true
-      NPM_TOKEN:
-        description: "Auth token for npm publish"
+      NPM_REGISTRY_TOKEN:
+        description: "NPM registry auth token"
+        required: true
+      GITHUB_TOKEN:
+        description: "GitHub token for API calls"
         required: true
 
 jobs:
@@ -34,9 +39,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: agent-ix/nodejs-actions/image-metadata@main
         with:
-          registry: ${{ inputs.registry }}
-          repository: ${{ inputs.repository }}
-          GITHUB_TOKEN: ${{ secrets.REGISTRY_PASSWORD }}
+          docker_registry: ${{ inputs.docker_registry }}
+          docker_repository: ${{ inputs.docker_repository }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     runs-on: ubuntu-latest
@@ -46,8 +51,8 @@ jobs:
       - uses: agent-ix/docker-actions/build@main
         with:
           artifact: image.json
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   jest:
@@ -56,8 +61,8 @@ jobs:
     steps:
       - uses: agent-ix/nodejs-actions/jest@main
         with:
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
 
   eslint:
     runs-on: ubuntu-latest
@@ -65,8 +70,8 @@ jobs:
     steps:
       - uses: agent-ix/nodejs-actions/eslint@main
         with:
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
 
   prettier:
     runs-on: ubuntu-latest
@@ -74,8 +79,8 @@ jobs:
     steps:
       - uses: agent-ix/nodejs-actions/prettier@main
         with:
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
 
   publish:
     runs-on: ubuntu-latest
@@ -85,8 +90,8 @@ jobs:
       - uses: agent-ix/nodejs-actions/publish@main
         with:
           artifact: image.json
-          token: ${{ secrets.NPM_TOKEN }}
-          registry: ${{ inputs.npm }}
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          npm_registry: ${{ inputs.npm_registry }}
+          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
