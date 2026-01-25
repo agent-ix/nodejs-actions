@@ -45,7 +45,7 @@ jobs:
         with:
           docker_registry: ${{ inputs.docker_registry }}
           docker_repository: ${{ inputs.docker_repository }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
 
   build:
     runs-on: ubuntu-latest
