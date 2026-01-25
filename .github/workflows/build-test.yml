@@ -95,4 +95,4 @@ jobs:
           docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
           npm_registry: ${{ inputs.npm_registry }}
           npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
