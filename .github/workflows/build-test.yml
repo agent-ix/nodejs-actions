@@ -29,6 +29,12 @@ on:
         required: true
 
 
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: read
+
 jobs:
 
   metadata:
