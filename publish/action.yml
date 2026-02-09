@@ -110,6 +110,7 @@ runs:
             -e PACKAGE_ID="${{ steps.version.outputs.package_id }}" \
             -e NODE_AUTH_TOKEN="$NODE_AUTH_TOKEN" \
             -v "$(pwd)/logs/npm:/root/.npm/_logs" \
+            -v "$(pwd):/app" \
             "${{ steps.image.outputs.url }}" bash -c "$PUBLISH_CMD"
         fi
 
