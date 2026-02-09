@@ -41,7 +41,7 @@ runs:
       run: |
         desc=$(jq -r .description package.json)
         echo "description=$desc" >> "$GITHUB_OUTPUT"
-        echo "version=$(make version)" >> "$GITHUB_OUTPUT"
+        echo "version=$(make version | tail -n 1)" >> "$GITHUB_OUTPUT"
 
     - name: Generate image metadata
       id: meta
