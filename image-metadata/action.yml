@@ -41,7 +41,18 @@ runs:
       run: |
         desc=$(jq -r .description package.json)
         echo "description=$desc" >> "$GITHUB_OUTPUT"
-        echo "version=$(make version | tail -n 1)" >> "$GITHUB_OUTPUT"
+        
+        # Try to get exact tag first if clean
+        EXACT_TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+        STATUS=$(git status --porcelain)
+        
+        if [[ -n "$EXACT_TAG" && -z "$STATUS" ]]; then
+          echo "Using exact tag version: $EXACT_TAG"
+          echo "version=$EXACT_TAG" >> "$GITHUB_OUTPUT"
+        else
+          echo "Using make version fallback"
+          echo "version=$(make version | tail -n 1)" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Generate image metadata
       id: meta
