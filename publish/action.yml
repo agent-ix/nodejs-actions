@@ -52,6 +52,7 @@ runs:
         NODE_AUTH_TOKEN: ${{ inputs.npm_registry_token }}
       run: |
         BASE_VERSION="${{ steps.image.outputs.version }}"
+        BASE_VERSION="${BASE_VERSION#v}"
         PKG_NAME=$(node -p "require('./package.json').name")
         echo "📦 Base version: $BASE_VERSION"
 
