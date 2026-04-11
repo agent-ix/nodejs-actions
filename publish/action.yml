@@ -50,7 +50,6 @@ runs:
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.npm_registry_token }}
-        NPM_REGISTRY: ${{ inputs.npm_registry }}
       run: |
         BASE_VERSION="${{ steps.image.outputs.version }}"
         BASE_VERSION="${BASE_VERSION#v}"
@@ -59,7 +58,7 @@ runs:
 
         VERSION="$BASE_VERSION"
         ATTEMPT=0
-        while npm view --registry "$NPM_REGISTRY" "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
+        while npm view "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
           ATTEMPT=$((ATTEMPT + 1))
           VERSION="$BASE_VERSION.$ATTEMPT"
         done
@@ -94,31 +93,33 @@ runs:
     - name: Publish to npm
       shell: bash
       env:
-        NODE_AUTH_TOKEN: ${{ inputs.npm_registry_token }}
         NPM_REGISTRY: ${{ inputs.npm_registry }}
+        NPM_TOKEN: ${{ inputs.npm_registry_token }}
       run: |
         mkdir -p logs/npm
-        REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https://||;s|/$||')
-        SETUP_NPM="npm config set @agent-ix:registry $NPM_REGISTRY && npm config set //${REGISTRY_HOST}/:_authToken=\$NODE_AUTH_TOKEN"
-        # --registry overrides publishConfig.registry in package.json (which may point to npm.ix)
-        PUBLISH_CMD="npm publish --registry $NPM_REGISTRY --no-git-checks --tag \"\${TAG:-latest}\" && if [[ -n \"\$TAG\" ]]; then npm dist-tag add --registry $NPM_REGISTRY \"\$PACKAGE_ID\" \"\$TAG\"; fi"
+        NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
+        PUBLISH_CMD='npm publish --no-git-checks --tag "${TAG:-latest}" && if [[ -n "$TAG" ]]; then npm dist-tag add "$PACKAGE_ID" "$TAG"; fi'
 
         if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
           docker compose run --rm \
             -e TAG="${{ steps.meta.outputs.tag }}" \
             -e PACKAGE_ID="${{ steps.version.outputs.package_id }}" \
-            -e NODE_AUTH_TOKEN="$NODE_AUTH_TOKEN" \
+            -e NPM_REGISTRY \
+            -e NPM_REGISTRY_HOST \
+            -e NPM_TOKEN \
             -v "$(pwd)/logs/npm:/root/.npm/_logs" \
-            dev bash -c "$SETUP_NPM && $PUBLISH_CMD"
+            dev bash -c "$PUBLISH_CMD"
         else
           echo "No docker-compose.yml found, using docker run with image: ${{ steps.image.outputs.url }}"
           docker run --rm \
             -e TAG="${{ steps.meta.outputs.tag }}" \
             -e PACKAGE_ID="${{ steps.version.outputs.package_id }}" \
-            -e NODE_AUTH_TOKEN="$NODE_AUTH_TOKEN" \
+            -e NPM_REGISTRY \
+            -e NPM_REGISTRY_HOST \
+            -e NPM_TOKEN \
             -v "$(pwd)/logs/npm:/root/.npm/_logs" \
             -v "$(pwd):/app" \
-            "${{ steps.image.outputs.url }}" bash -c "$SETUP_NPM && $PUBLISH_CMD"
+            "${{ steps.image.outputs.url }}" bash -c "$PUBLISH_CMD"
         fi
 
     - name: Upload npm debug logs
