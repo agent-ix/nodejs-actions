@@ -100,7 +100,8 @@ runs:
         mkdir -p logs/npm
         REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https://||;s|/$||')
         SETUP_NPM="npm config set @agent-ix:registry $NPM_REGISTRY && npm config set //${REGISTRY_HOST}/:_authToken=\$NODE_AUTH_TOKEN"
-        PUBLISH_CMD='npm publish --no-git-checks --tag "${TAG:-latest}" && if [[ -n "$TAG" ]]; then npm dist-tag add "$PACKAGE_ID" "$TAG"; fi'
+        # --registry overrides publishConfig.registry in package.json (which may point to npm.ix)
+        PUBLISH_CMD="npm publish --registry $NPM_REGISTRY --no-git-checks --tag \"\${TAG:-latest}\" && if [[ -n \"\$TAG\" ]]; then npm dist-tag add --registry $NPM_REGISTRY \"\$PACKAGE_ID\" \"\$TAG\"; fi"
 
         if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
           docker compose run --rm \
