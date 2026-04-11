@@ -138,7 +138,7 @@ Complete CI workflow for Node.js projects.
 
 **Jobs:**
 1. **metadata** - Generate image.json
-2. **build** - Build Docker image
+2. **build** - Build Docker image (passes `NPM_REGISTRY_URL` as a Docker build-arg via `extra_build_args` so `@agent-ix/*` scoped packages resolve during `pnpm install`)
 3. **jest** - Run tests
 4. **eslint** - Run linting
 5. **prettier** - Check formatting
