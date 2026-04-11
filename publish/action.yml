@@ -50,6 +50,7 @@ runs:
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.npm_registry_token }}
+        NPM_REGISTRY: ${{ inputs.npm_registry }}
       run: |
         BASE_VERSION="${{ steps.image.outputs.version }}"
         BASE_VERSION="${BASE_VERSION#v}"
@@ -58,7 +59,7 @@ runs:
 
         VERSION="$BASE_VERSION"
         ATTEMPT=0
-        while npm view "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
+        while npm view --registry "$NPM_REGISTRY" "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
           ATTEMPT=$((ATTEMPT + 1))
           VERSION="$BASE_VERSION.$ATTEMPT"
         done
