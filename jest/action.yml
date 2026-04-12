@@ -32,10 +32,10 @@ runs:
       run: |
         set -o pipefail
         if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
-          docker compose run --rm dev pnpm jest 2>&1 | tee jest.txt
+          docker compose run --rm dev pnpm test 2>&1 | tee jest.txt
         else
           echo "No docker-compose.yml found, using docker run..."
-          docker run --rm -v "$(pwd):/app" "${{ steps.image.outputs.url }}" pnpm jest 2>&1 | tee jest.txt
+          docker run --rm -v "$(pwd):/app" "${{ steps.image.outputs.url }}" pnpm test 2>&1 | tee jest.txt
         fi
 
     - name: Upload Jest output
