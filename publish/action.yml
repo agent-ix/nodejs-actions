@@ -70,7 +70,20 @@ runs:
         ATTEMPT=0
         while npm view "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
           ATTEMPT=$((ATTEMPT + 1))
-          VERSION="$BASE_VERSION.$ATTEMPT"
+          VERSION=$(node -e '
+            const base = process.argv[1];
+            const attempt = Number(process.argv[2]);
+            const match = base.match(/^(\d+)\.(\d+)\.(\d+)(-.+)?$/);
+            if (!match) {
+              throw new Error(`Unsupported semver base: ${base}`);
+            }
+
+            const major = Number(match[1]);
+            const minor = Number(match[2]);
+            const patch = Number(match[3]) + attempt;
+            const suffix = match[4] ?? "";
+            console.log(`${major}.${minor}.${patch}${suffix}`);
+          ' "$BASE_VERSION" "$ATTEMPT")
         done
         PACKAGE_ID="$PKG_NAME@$VERSION"
         echo "📦 Final resolved version: $PACKAGE_ID"
