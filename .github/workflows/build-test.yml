@@ -17,6 +17,21 @@ on:
         required: false
         type: string
         default: "https://npm.pkg.github.com"
+      helm_chart_path:
+        description: "Optional path to an app Helm chart to package and publish"
+        required: false
+        type: string
+        default: ""
+      helm_chart_registry:
+        description: "Registry host for OCI Helm chart publishing"
+        required: false
+        type: string
+        default: "ghcr.io"
+      helm_chart_repository:
+        description: "OCI repository path for Helm charts (e.g. agent-ix/charts)"
+        required: false
+        type: string
+        default: ""
     secrets:
       DOCKER_REGISTRY_USER:
         description: "Docker registry username"
@@ -88,6 +103,9 @@ jobs:
             NPM_REGISTRY=${{ inputs.npm_registry }}
             NPM_REGISTRY_URL=${{ inputs.npm_registry }}
           npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          helm_chart_path: ${{ inputs.helm_chart_path }}
+          helm_chart_registry: ${{ inputs.helm_chart_registry }}
+          helm_chart_repository: ${{ inputs.helm_chart_repository }}
 
   jest:
     runs-on: ubuntu-latest
