@@ -79,6 +79,7 @@ jobs:
           fi
       - uses: agent-ix/docker-actions/build@main
         with:
+          checkout: false
           artifact: image.json
           REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
