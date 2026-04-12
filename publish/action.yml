@@ -39,6 +39,15 @@ runs:
         node-version: '22.x'
         registry-url: ${{ inputs.npm_registry }}
 
+    - name: Configure npm registry for CI
+      shell: bash
+      env:
+        NPM_REGISTRY: ${{ inputs.npm_registry }}
+        NPM_TOKEN: ${{ inputs.npm_registry_token }}
+      run: |
+        export NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
+        printf '@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
+
     - name: Get PR
       id: get_pr
       uses: agent-ix/git-actions/get-pr@main
@@ -49,6 +58,7 @@ runs:
       id: version
       shell: bash
       env:
+        NPM_REGISTRY: ${{ inputs.npm_registry }}
         NODE_AUTH_TOKEN: ${{ inputs.npm_registry_token }}
       run: |
         BASE_VERSION="${{ steps.image.outputs.version }}"
@@ -58,7 +68,7 @@ runs:
 
         VERSION="$BASE_VERSION"
         ATTEMPT=0
-        while npm view "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
+        while npm view "$PKG_NAME@$VERSION" --registry "$NPM_REGISTRY" > /dev/null 2>&1; do
           ATTEMPT=$((ATTEMPT + 1))
           VERSION="$BASE_VERSION.$ATTEMPT"
         done
@@ -98,7 +108,7 @@ runs:
       run: |
         mkdir -p logs/npm
         export NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
-        PUBLISH_CMD='npm publish --no-git-checks --tag "${TAG:-latest}" && if [[ -n "$TAG" ]]; then npm dist-tag add "$PACKAGE_ID" "$TAG"; fi'
+        PUBLISH_CMD='printf "@agent-ix:registry=%s\n//%s/:_authToken=%s\n" "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > /root/.npmrc && npm publish --no-git-checks --registry "$NPM_REGISTRY" --tag "${TAG:-latest}" && if [[ -n "$TAG" ]]; then npm dist-tag add "$PACKAGE_ID" "$TAG" --registry "$NPM_REGISTRY"; fi'
 
         if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
           docker compose run --rm \
@@ -117,8 +127,8 @@ runs:
             -e NPM_REGISTRY \
             -e NPM_REGISTRY_HOST \
             -e NPM_TOKEN \
-            -v "$(pwd)/logs/npm:/root/.npm/_logs" \
             -v "$(pwd):/app" \
+            -v "$(pwd)/logs/npm:/root/.npm/_logs" \
             "${{ steps.image.outputs.url }}" bash -c "$PUBLISH_CMD"
         fi
 

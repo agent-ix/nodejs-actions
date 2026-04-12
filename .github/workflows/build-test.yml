@@ -60,7 +60,9 @@ jobs:
           REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          extra_build_args: NPM_REGISTRY=${{ inputs.npm_registry }}
+          extra_build_args: |
+            NPM_REGISTRY=${{ inputs.npm_registry }}
+            NPM_REGISTRY_URL=${{ inputs.npm_registry }}
           npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
 
   jest:
