@@ -35,6 +35,11 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Refresh git tags
+      shell: bash
+      run: |
+        git fetch origin --tags --force
+
     - name: Extract version and description from package.json
       id: data
       shell: bash
