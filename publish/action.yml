@@ -121,7 +121,28 @@ runs:
       run: |
         mkdir -p logs/npm
         export NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
-        PUBLISH_CMD='printf "registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n" "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > /root/.npmrc && npm publish --no-git-checks --tag "${TAG:-latest}" && if [[ -n "$TAG" ]]; then npm dist-tag add "$PACKAGE_ID" "$TAG"; fi'
+        PUBLISH_CMD='set -e
+        printf "registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n" "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > /root/.npmrc
+        if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
+          echo "Package already published: $PACKAGE_ID"
+          if [[ -n "$TAG" ]]; then
+            npm dist-tag add "$PACKAGE_ID" "$TAG" || true
+          fi
+          exit 0
+        fi
+        if npm publish --no-git-checks --tag "${TAG:-latest}"; then
+          :
+        else
+          PUBLISH_EXIT=$?
+          if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
+            echo "Package became available during publish race: $PACKAGE_ID"
+          else
+            exit "$PUBLISH_EXIT"
+          fi
+        fi
+        if [[ -n "$TAG" ]]; then
+          npm dist-tag add "$PACKAGE_ID" "$TAG" || true
+        fi'
 
         if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
           docker compose run --rm \
