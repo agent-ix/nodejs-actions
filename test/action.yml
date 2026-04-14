@@ -1,5 +1,5 @@
-name: "Run Jest"
-description: "Runs Jest tests inside a Docker container"
+name: "Run Tests"
+description: "Runs tests (vitest) inside a Docker container"
 
 inputs:
   docker_registry_user:
@@ -25,36 +25,36 @@ runs:
         registry_user: ${{ inputs.docker_registry_user }}
         registry_password: ${{ inputs.docker_registry_password }}
 
-    - name: Run Jest
-      id: jest
+    - name: Run Tests
+      id: test
       shell: bash
       continue-on-error: true
       run: |
         set -o pipefail
         if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
-          docker compose run --rm dev pnpm test 2>&1 | tee jest.txt
+          docker compose run --rm dev pnpm test 2>&1 | tee test.txt
         else
           echo "No docker-compose.yml found, using docker run..."
-          docker run --rm -v "$(pwd):/app" "${{ steps.image.outputs.url }}" pnpm test 2>&1 | tee jest.txt
+          docker run --rm -v "$(pwd):/app" "${{ steps.image.outputs.url }}" pnpm test 2>&1 | tee test.txt
         fi
 
-    - name: Upload Jest output
+    - name: Upload Test output
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: jest.txt
-        path: jest.txt
+        name: test.txt
+        path: test.txt
 
     - name: Add summary
       if: always()
       shell: bash
       run: |
-        if [ "${{ steps.jest.outcome }}" != "success" ]; then
-          echo '### ❌ Jest Report' >> $GITHUB_STEP_SUMMARY
-          cat jest.txt | tee /dev/stderr >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.test.outcome }}" != "success" ]; then
+          echo '### ❌ Test Report' >> $GITHUB_STEP_SUMMARY
+          cat test.txt | tee /dev/stderr >> $GITHUB_STEP_SUMMARY
         fi
 
-    - name: Fail if Jest failed
-      if: steps.jest.outcome != 'success'
+    - name: Fail if Tests failed
+      if: steps.test.outcome != 'success'
       shell: bash
       run: exit 1
