@@ -43,6 +43,11 @@ on:
         description: "NPM registry auth token"
         required: true
 
+permissions:
+  contents: read
+  packages: write
+  pull-requests: read
+
 
 
 
@@ -98,7 +103,7 @@ jobs:
           artifact: image.json
           REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           extra_build_args: |
             NPM_REGISTRY=${{ inputs.npm_registry }}
             NPM_REGISTRY_URL=${{ inputs.npm_registry }}
