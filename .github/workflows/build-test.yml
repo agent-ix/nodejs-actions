@@ -87,15 +87,15 @@ jobs:
         run: |
           export NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
           printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
-      - name: Refresh packages for CI
+      - name: Install packages for CI
         shell: bash
         run: |
-          if [[ -f Makefile ]]; then
-            make update-packages-latest
+          if [[ -f pnpm-lock.yaml ]]; then
+            pnpm install --frozen-lockfile
           elif [[ -f package.json ]]; then
-            pnpm update --latest
+            pnpm install
           else
-            echo "No package manifest found; skipping package refresh"
+            echo "No package manifest found; skipping package install"
           fi
       - uses: agent-ix/docker-actions/build@main
         with:
