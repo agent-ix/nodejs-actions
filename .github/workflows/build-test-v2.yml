@@ -76,12 +76,6 @@ jobs:
       - run: make install
       - run: make build
 
-      - name: Get PR number
-        id: get_pr
-        uses: agent-ix/git-actions/get-pr@main
-        with:
-          GITHUB_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
-
       - name: Resolve base version
         id: base
         shell: bash
@@ -125,7 +119,7 @@ jobs:
         id: disttag
         shell: bash
         run: |
-          PR="${{ steps.get_pr.outputs.pr }}"
+          PR="${{ github.event.pull_request.number }}"
           if [[ -n "$PR" ]]; then echo "tag=pr-$PR" >> "$GITHUB_OUTPUT"; fi
 
       - name: Inject version into package.json
