@@ -1,186 +1,129 @@
-# 🛠 Node.js Actions
+# Node.js Actions
 
-> Composite GitHub Actions and workflows for Node.js/TypeScript projects. Supports containerized testing, linting, formatting, version tagging, and publishing.
+Reusable GitHub workflows and composite actions for Node.js / TypeScript
+repos in the agent-ix ecosystem.
 
----
+Two entry-point workflows, picked by repo type:
 
-## 📦 Composite Actions
+| Workflow | Use for | Docker? |
+|---|---|---|
+| `build-test.yml` | Libraries (npm-only publish) | No — bare pnpm |
+| `build-test-app.yml` | Apps (runtime image + Helm chart) | Yes |
 
-### 🧾 `image-metadata`
-**Path:** `image-metadata/action.yml`
-
-Generates `image.json` metadata including tag and description from project state.
-
-**Inputs:**
-| Name               | Description                              | Required | Default      |
-|--------------------|------------------------------------------|----------|--------------|
-| `docker_repository`| Docker image repository (e.g., org/pkg)  | ✅        | —            |
-| `docker_registry`  | Docker registry host                     | ❌        | `ghcr.io`    |
-| `artifact`         | Output filename                          | ❌        | `image.json` |
-| `github_token`     | GitHub token for authentication          | ✅        | —            |
-
-**Outputs:**
-| Name         | Description               |
-|--------------|---------------------------|
-| `version`    | Resolved version          |
-| `url`        | Fully qualified image URL |
-| `image`      | Image path without tag    |
-
-**Behavior:**
-- Runs `make version` to compute semver-compatible tag
-- Reads `.description` from `package.json`
-- Constructs metadata JSON via `docker-actions/create-metadata`
+Libs are the common case. Apps are only the handful that ship a k8s
+deployment.
 
 ---
 
-### ✅ `jest`
-**Path:** `jest/action.yml`
+## `build-test.yml` — library CI (non-docker)
 
-Runs tests using Jest inside a Docker container using a previously-built image.
-
-**Inputs:**
-| Name                      | Description                           | Required | Default       |
-|---------------------------|---------------------------------------|----------|---------------|
-| `docker_registry_user`    | Docker registry username              | ✅        | —             |
-| `docker_registry_password`| Docker registry password              | ✅        | —             |
-| `artifact`                | Path to image.json                    | ❌        | `image.json`  |
-
-**Behavior:**
-- Pulls dev image from registry
-- Runs `pnpm jest` in container
-- Uploads `jest.txt` and adds step summary
-
----
-
-### 🧹 `eslint`
-**Path:** `eslint/action.yml`
-
-Runs ESLint inside the service container.
-
-**Inputs:**
-| Name                      | Description                           | Required | Default       |
-|---------------------------|---------------------------------------|----------|---------------|
-| `docker_registry_user`    | Docker registry username              | ✅        | —             |
-| `docker_registry_password`| Docker registry password              | ✅        | —             |
-| `artifact`                | Path to image.json                    | ❌        | `image.json`  |
-
-**Behavior:**
-- Pulls dev image from registry
-- Runs `pnpm eslint` in container
-- Uploads `eslint.txt` and adds step summary
-
----
-
-### 🎨 `prettier`
-**Path:** `prettier/action.yml`
-
-Checks code formatting using Prettier inside the container.
-
-**Inputs:**
-| Name                      | Description                           | Required | Default       |
-|---------------------------|---------------------------------------|----------|---------------|
-| `docker_registry_user`    | Docker registry username              | ✅        | —             |
-| `docker_registry_password`| Docker registry password              | ✅        | —             |
-| `artifact`                | Path to image.json                    | ❌        | `image.json`  |
-
-**Behavior:**
-- Pulls dev image from registry
-- Runs `pnpm prettier --check .` in container
-- Uploads `prettier.txt` and adds step summary
-
----
-
-### 🚀 `publish`
-**Path:** `publish/action.yml`
-
-Publishes the Node.js package using the version from `image.json`.
-
-**Inputs:**
-| Name                      | Description                           | Required | Default                      |
-|---------------------------|---------------------------------------|----------|------------------------------|
-| `artifact`                | Path to image.json                    | ✅        | —                            |
-| `docker_registry_user`    | Docker registry username              | ✅        | —                            |
-| `docker_registry_password`| Docker registry password              | ✅        | —                            |
-| `npm_registry`            | NPM registry URL                      | ❌        | `https://npm.pkg.github.com` |
-| `npm_registry_token`      | NPM auth token                        | ✅        | —                            |
-| `github_token`            | GitHub token for API calls            | ✅        | —                            |
-
-**Behavior:**
-- Pulls dev image from Docker registry
-- Resolves version from image metadata
-- Gets PR number for dist-tag
-- Publishes via `npm publish` with resolved version
-- Adds PR dist-tag if applicable
-
----
-
-## 📋 Workflows
-
-### 🧪 `build-test.yml`
-**Path:** `.github/workflows/build-test.yml`
-
-Complete CI workflow for Node.js projects.
-
-**Inputs:**
-| Name               | Description                            | Required | Default                      |
-|--------------------|----------------------------------------|----------|------------------------------|
-| `docker_repository`| Docker image repository                | ✅        | —                            |
-| `docker_registry`  | Docker registry host                   | ❌        | `ghcr.io`                    |
-| `npm_registry`     | NPM registry URL                       | ❌        | `https://npm.pkg.github.com` |
-
-**Secrets:**
-| Name                      | Description                   | Required |
-|---------------------------|-------------------------------|----------|
-| `DOCKER_REGISTRY_USER`    | Docker registry username      | ✅        |
-| `DOCKER_REGISTRY_PASSWORD`| Docker registry password      | ✅        |
-| `NPM_REGISTRY_TOKEN`      | NPM registry auth token       | ✅        |
-| `GITHUB_TOKEN`            | GitHub token for API calls    | ✅        |
+Parallel `test` and `lint` status checks plus `publish`. Each job runs
+`make install` then `make test`/`make lint`/`make build`+publish against a
+shared pnpm store cache. No Docker image is built.
 
 **Jobs:**
-1. **metadata** - Generate image.json
-2. **build** - Build Docker image (passes `NPM_REGISTRY_URL` as a Docker build-arg via `extra_build_args` so `@agent-ix/*` scoped packages resolve during `pnpm install`)
-3. **jest** - Run tests
-4. **eslint** - Run linting
-5. **prettier** - Check formatting
-6. **publish** - Publish to npm registry
+1. `test` — `make install && make test`
+2. `lint` — `make install && make lint`
+3. `publish` — `make install && make build`, then npm publish with
+   PR dist-tag (`pr-N`) on PRs or `latest` on tags. Auto-bumps patch
+   if the resolved version is already published, idempotent on races.
 
----
+**Inputs:**
 
-## 🧠 Versioning
+| Name | Required | Default |
+|---|---|---|
+| `node_version` | No | `20` |
+| `npm_registry` | No | `https://npm.pkg.github.com` |
 
-Version is derived from Git via:
-```bash
-make version
-```
+**Secrets:**
 
-It must output a valid semver string like `1.2.3+4.gabc123`.
-This is used in:
-- image.json
-- Docker tags
-- npm package version
+| Name | Required |
+|---|---|
+| `NPM_REGISTRY_TOKEN` | Yes |
 
----
-
-## 🚀 Example Usage
+**Example:**
 
 ```yaml
-name: NodeJS CI/CD
-
+name: CI
 on:
   push:
-    branches: [main]
-  pull_request:
+    tags: ['*.*.*']
+  workflow_dispatch:
 
 jobs:
-  build-test:
+  ci:
     uses: agent-ix/nodejs-actions/.github/workflows/build-test.yml@main
+    secrets:
+      NPM_REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+```
+
+Version resolution uses the git tag when checked out on one (clean tree);
+otherwise falls back to `make version`.
+
+---
+
+## `build-test-app.yml` — app CI (docker + Helm)
+
+Builds a Docker runtime image, optionally packages and pushes an OCI Helm
+chart, runs `test`/`eslint`/`prettier` inside the image, then publishes
+npm + image. Used by apps whose deploy artifact is a container image.
+
+**Inputs:**
+
+| Name | Required | Default |
+|---|---|---|
+| `docker_repository` | Yes | — |
+| `docker_registry` | No | `ghcr.io` |
+| `npm_registry` | No | `https://npm.pkg.github.com` |
+| `helm_chart_path` | No | `""` (no chart published) |
+| `helm_chart_registry` | No | `ghcr.io` |
+| `helm_chart_repository` | No | `""` |
+
+**Secrets:** `DOCKER_REGISTRY_USER`, `DOCKER_REGISTRY_PASSWORD`,
+`NPM_REGISTRY_TOKEN`.
+
+**Example:**
+
+```yaml
+jobs:
+  ci:
+    uses: agent-ix/nodejs-actions/.github/workflows/build-test-app.yml@main
     with:
       docker_repository: ${{ github.repository }}
-      # docker_registry: ghcr.io  (default)
-      # npm_registry: https://npm.pkg.github.com  (default)
+      helm_chart_path: helm
+      helm_chart_repository: agent-ix/my-app
     secrets:
       DOCKER_REGISTRY_USER: ${{ github.actor }}
       DOCKER_REGISTRY_PASSWORD: ${{ secrets.REGISTRY_TOKEN }}
       NPM_REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
 ```
+
+---
+
+## Composite actions
+
+### `setup-npmrc`
+Writes a CI `.npmrc` scoping `@agent-ix` at the configured registry with
+an auth token. Used by `build-test.yml` jobs before `make install`.
+
+Inputs: `npm_registry` (default `https://npm.pkg.github.com`),
+`npm_registry_token` (required).
+
+### `image-metadata`, `test`, `eslint`, `prettier`, `publish`
+Used internally by `build-test-app.yml`. Pull a dev Docker image and run
+the named command inside it, plus image-metadata for version resolution
+and publish for npm release. Not intended for direct use by repos; call
+`build-test-app.yml` instead.
+
+---
+
+## Versioning
+
+The repo is tagged with floating major tags (e.g. `v2`). `@main` tracks
+latest; pin to `@v2` if you need to insulate against future breaking
+changes.
+
+Consumer-side version is computed by the `publish` job:
+- On an exact git tag with a clean tree → that tag
+- Otherwise → `make version` from the consumer repo (semver with
+  commit metadata, e.g. `0.2.7-20260419.163812-abc123.xyz`)
