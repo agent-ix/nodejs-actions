@@ -1,149 +1,183 @@
-name: CI
+name: CI v2
+
+# Bare-node_modules CI for TS/React repos.
+# Replaces the Docker-based build-test.yml. Two parallel status checks
+# (test, lint), plus a publish job that runs after both pass.
+# Each job does its own `pnpm install --frozen-lockfile` against a shared
+# pnpm store cache — warm-store install is a few seconds.
 
 on:
   workflow_call:
     inputs:
-      docker_repository:
-        description: "Docker image repository (e.g. my-org/myapp)"
-        required: true
-        type: string
-      docker_registry:
-        description: "Docker registry host"
+      node_version:
         required: false
         type: string
-        default: ghcr.io
+        default: "20"
       npm_registry:
-        description: "NPM registry URL"
         required: false
         type: string
         default: "https://npm.pkg.github.com"
-      helm_chart_path:
-        description: "Optional path to an app Helm chart to package and publish"
-        required: false
-        type: string
-        default: ""
-      helm_chart_registry:
-        description: "Registry host for OCI Helm chart publishing"
-        required: false
-        type: string
-        default: "ghcr.io"
-      helm_chart_repository:
-        description: "OCI repository path for Helm charts (e.g. agent-ix/charts)"
-        required: false
-        type: string
-        default: ""
     secrets:
-      DOCKER_REGISTRY_USER:
-        description: "Docker registry username"
-        required: true
-      DOCKER_REGISTRY_PASSWORD:
-        description: "Docker registry password"
-        required: true
       NPM_REGISTRY_TOKEN:
-        description: "NPM registry auth token"
         required: true
-
-
-
-
 
 jobs:
 
-  metadata:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://npm.pkg.github.com
-      - run: corepack enable
-      - uses: agent-ix/nodejs-actions/image-metadata@main
-        with:
-          docker_registry: ${{ inputs.docker_registry }}
-          docker_repository: ${{ inputs.docker_repository }}
-          github_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
-
-  build:
-    runs-on: ubuntu-latest
-    needs: metadata
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: ${{ inputs.npm_registry }}
-      - run: corepack enable
-      - name: Configure npm registry for CI
-        shell: bash
-        env:
-          NPM_REGISTRY: ${{ inputs.npm_registry }}
-          NPM_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
-        run: |
-          export NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
-          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
-      - name: Install packages for CI
-        shell: bash
-        run: |
-          if [[ -f pnpm-lock.yaml ]]; then
-            pnpm install --frozen-lockfile
-          elif [[ -f package.json ]]; then
-            pnpm install
-          else
-            echo "No package manifest found; skipping package install"
-          fi
-      - uses: agent-ix/docker-actions/build@main
-        with:
-          checkout: false
-          artifact: image.json
-          REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
-          REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          extra_build_args: |
-            NPM_REGISTRY=${{ inputs.npm_registry }}
-            NPM_REGISTRY_URL=${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
-          helm_chart_path: ${{ inputs.helm_chart_path }}
-          helm_chart_registry: ${{ inputs.helm_chart_registry }}
-          helm_chart_repository: ${{ inputs.helm_chart_repository }}
-
   test:
     runs-on: ubuntu-latest
-    needs: build
     steps:
-      - uses: agent-ix/nodejs-actions/test@main
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
-          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+      - uses: agent-ix/nodejs-actions/setup-npmrc@main
+        with:
+          npm_registry: ${{ inputs.npm_registry }}
+          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+      - run: make install
+      - run: make test
 
-  eslint:
+  lint:
     runs-on: ubuntu-latest
-    needs: build
     steps:
-      - uses: agent-ix/nodejs-actions/eslint@main
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
-          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
-
-  prettier:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: agent-ix/nodejs-actions/prettier@main
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+      - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
-          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
-          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          npm_registry: ${{ inputs.npm_registry }}
+          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+      - run: make install
+      - run: make lint
 
   publish:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [test, lint]
     steps:
       - uses: actions/checkout@v4
-      - uses: agent-ix/nodejs-actions/publish@main
         with:
-          artifact: image.json
-          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
-          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          registry-url: ${{ inputs.npm_registry }}
+          cache: pnpm
+      - uses: agent-ix/nodejs-actions/setup-npmrc@main
+        with:
           npm_registry: ${{ inputs.npm_registry }}
           npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
-          github_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+
+      - run: make install
+      - run: make build
+
+      - name: Resolve base version
+        id: base
+        shell: bash
+        run: |
+          git fetch origin --tags --force
+          EXACT_TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+          STATUS=$(git status --porcelain)
+          if [[ -n "$EXACT_TAG" && -z "$STATUS" ]]; then
+            BASE="${EXACT_TAG#v}"
+          else
+            BASE=$(make version | tail -n 1)
+            BASE="${BASE#v}"
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve final version (auto-bump if already published)
+        id: version
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
+        run: |
+          BASE="${{ steps.base.outputs.base }}"
+          PKG_NAME=$(node -p "require('./package.json').name")
+          VERSION="$BASE"
+          ATTEMPT=0
+          while npm view "$PKG_NAME@$VERSION" > /dev/null 2>&1; do
+            ATTEMPT=$((ATTEMPT + 1))
+            VERSION=$(node -e '
+              const base = process.argv[1];
+              const attempt = Number(process.argv[2]);
+              const m = base.match(/^(\d+)\.(\d+)\.(\d+)(-.+)?$/);
+              if (!m) throw new Error(`bad semver: ${base}`);
+              console.log(`${m[1]}.${m[2]}.${Number(m[3])+attempt}${m[4] ?? ""}`);
+            ' "$BASE" "$ATTEMPT")
+          done
+          echo "package=$PKG_NAME"     >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"      >> "$GITHUB_OUTPUT"
+          echo "package_id=$PKG_NAME@$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve dist-tag
+        id: disttag
+        shell: bash
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+          if [[ -n "$PR" ]]; then echo "tag=pr-$PR" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Inject version into package.json
+        shell: bash
+        run: |
+          jq --arg v "${{ steps.version.outputs.version }}" '.version=$v' package.json > tmp && mv tmp package.json
+
+      - name: Publish to npm
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          PACKAGE_ID: ${{ steps.version.outputs.package_id }}
+          TAG: ${{ steps.disttag.outputs.tag }}
+        run: |
+          set -e
+          mkdir -p logs/npm
+          export npm_config_cache="$(pwd)/logs/npm"
+          if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
+            echo "Already published: $PACKAGE_ID"
+            [[ -n "$TAG" ]] && npm dist-tag add "$PACKAGE_ID" "$TAG" || true
+            exit 0
+          fi
+          if ! npm publish --no-git-checks --tag "${TAG:-latest}"; then
+            PUBLISH_EXIT=$?
+            if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
+              echo "Race: became available during publish"
+            else
+              exit "$PUBLISH_EXIT"
+            fi
+          fi
+          [[ -n "$TAG" ]] && npm dist-tag add "$PACKAGE_ID" "$TAG" || true
+
+      - name: Upload npm debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-npm-logs
+          path: logs/npm/
+
+      - name: Write summary
+        shell: bash
+        run: |
+          PKG="${{ steps.version.outputs.package }}"
+          VER="${{ steps.version.outputs.version }}"
+          ID="${{ steps.version.outputs.package_id }}"
+          TAG="${{ steps.disttag.outputs.tag }}"
+          {
+            echo "### 📦 npm Package Published"
+            echo "- Name: \`$PKG\`"
+            echo "- Version: \`$VER\`"
+            echo
+            echo "### Package ID"
+            echo '```'
+            echo "$ID"
+            echo '```'
+            echo "### Install"
+            echo '```bash'
+            echo "npm install $ID"
+            [[ -n "$TAG" ]] && echo "npm install $PKG@$TAG"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
