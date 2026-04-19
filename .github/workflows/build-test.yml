@@ -17,9 +17,21 @@ on:
         required: false
         type: string
         default: "https://npm.pkg.github.com"
+      docker_repository:
+        required: false
+        type: string
+        default: ""
+      docker_registry:
+        required: false
+        type: string
+        default: "ghcr.io"
     secrets:
       NPM_REGISTRY_TOKEN:
         required: true
+      DOCKER_REGISTRY_USER:
+        required: false
+      DOCKER_REGISTRY_PASSWORD:
+        required: false
 
 jobs:
 
