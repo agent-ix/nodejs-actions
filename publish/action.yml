@@ -144,27 +144,15 @@ runs:
           npm dist-tag add "$PACKAGE_ID" "$TAG" || true
         fi'
 
-        if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
-          docker compose run --rm \
-            -e TAG="${{ steps.meta.outputs.tag }}" \
-            -e PACKAGE_ID="${{ steps.version.outputs.package_id }}" \
-            -e NPM_REGISTRY \
-            -e NPM_REGISTRY_HOST \
-            -e NPM_TOKEN \
-            -v "$(pwd)/logs/npm:/root/.npm/_logs" \
-            dev bash -c "$PUBLISH_CMD"
-        else
-          echo "No docker-compose.yml found, using docker run with image: ${{ steps.image.outputs.url }}"
-          docker run --rm \
-            -e TAG="${{ steps.meta.outputs.tag }}" \
-            -e PACKAGE_ID="${{ steps.version.outputs.package_id }}" \
-            -e NPM_REGISTRY \
-            -e NPM_REGISTRY_HOST \
-            -e NPM_TOKEN \
-            -v "$(pwd):/app" \
-            -v "$(pwd)/logs/npm:/root/.npm/_logs" \
-            "${{ steps.image.outputs.url }}" bash -c "$PUBLISH_CMD"
-        fi
+        docker run --rm \
+          -e TAG="${{ steps.meta.outputs.tag }}" \
+          -e PACKAGE_ID="${{ steps.version.outputs.package_id }}" \
+          -e NPM_REGISTRY \
+          -e NPM_REGISTRY_HOST \
+          -e NPM_TOKEN \
+          -v "$(pwd):/app" \
+          -v "$(pwd)/logs/npm:/root/.npm/_logs" \
+          "${{ steps.image.outputs.url }}" bash -c "$PUBLISH_CMD"
 
     - name: Upload npm debug logs
       if: always()

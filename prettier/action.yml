@@ -31,12 +31,7 @@ runs:
       continue-on-error: true
       run: |
         set -o pipefail
-        if [ -f "docker-compose.yml" ] || [ -f "compose.yaml" ]; then
-          docker compose run --rm dev pnpm prettier --check . 2>&1 | tee prettier.txt
-        else
-          echo "No docker-compose.yml found, using docker run..."
-          docker run --rm -v "$(pwd):/app" "${{ steps.image.outputs.url }}" pnpm prettier --check . 2>&1 | tee prettier.txt
-        fi
+        docker run --rm -v "$(pwd):/app" "${{ steps.image.outputs.url }}" pnpm prettier --check . 2>&1 | tee prettier.txt
 
     - name: Upload Prettier output
       if: always()
