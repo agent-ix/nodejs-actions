@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      docker_repository:
+        description: "Docker image repository (e.g. my-org/myapp)"
+        required: true
+        type: string
+      docker_registry:
+        description: "Docker registry host"
+        required: false
+        type: string
+        default: ghcr.io
+      npm_registry:
+        description: "NPM registry URL"
+        required: false
+        type: string
+        default: "https://npm.pkg.github.com"
+      helm_chart_path:
+        description: "Optional path to an app Helm chart to package and publish"
+        required: false
+        type: string
+        default: ""
+      helm_chart_registry:
+        description: "Registry host for OCI Helm chart publishing"
+        required: false
+        type: string
+        default: "ghcr.io"
+      helm_chart_repository:
+        description: "OCI repository path for Helm charts (e.g. agent-ix/charts)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      DOCKER_REGISTRY_USER:
+        description: "Docker registry username"
+        required: true
+      DOCKER_REGISTRY_PASSWORD:
+        description: "Docker registry password"
+        required: true
+      NPM_REGISTRY_TOKEN:
+        description: "NPM registry auth token"
+        required: true
+
+
+
+
+
+jobs:
+
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+      - run: corepack enable
+      - uses: agent-ix/nodejs-actions/image-metadata@main
+        with:
+          docker_registry: ${{ inputs.docker_registry }}
+          docker_repository: ${{ inputs.docker_repository }}
+          github_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+
+  build:
+    runs-on: ubuntu-latest
+    needs: metadata
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: ${{ inputs.npm_registry }}
+      - run: corepack enable
+      - name: Configure npm registry for CI
+        shell: bash
+        env:
+          NPM_REGISTRY: ${{ inputs.npm_registry }}
+          NPM_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
+        run: |
+          export NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
+      - name: Install packages for CI
+        shell: bash
+        run: |
+          if [[ -f pnpm-lock.yaml ]]; then
+            pnpm install --frozen-lockfile
+          elif [[ -f package.json ]]; then
+            pnpm install
+          else
+            echo "No package manifest found; skipping package install"
+          fi
+      - uses: agent-ix/docker-actions/build@main
+        with:
+          checkout: false
+          artifact: image.json
+          REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          extra_build_args: |
+            NPM_REGISTRY=${{ inputs.npm_registry }}
+            NPM_REGISTRY_URL=${{ inputs.npm_registry }}
+          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          helm_chart_path: ${{ inputs.helm_chart_path }}
+          helm_chart_registry: ${{ inputs.helm_chart_registry }}
+          helm_chart_repository: ${{ inputs.helm_chart_repository }}
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: agent-ix/nodejs-actions/test@main
+        with:
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+
+  eslint:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: agent-ix/nodejs-actions/eslint@main
+        with:
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+
+  prettier:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: agent-ix/nodejs-actions/prettier@main
+        with:
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: agent-ix/nodejs-actions/publish@main
+        with:
+          artifact: image.json
+          docker_registry_user: ${{ secrets.DOCKER_REGISTRY_USER }}
+          docker_registry_password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          npm_registry: ${{ inputs.npm_registry }}
+          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          github_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
