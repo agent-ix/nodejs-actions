@@ -1,0 +1,20 @@
+name: "Setup .npmrc"
+description: "Writes a CI .npmrc pointing @agent-ix at the configured registry with auth token"
+
+inputs:
+  npm_registry:
+    required: false
+    default: "https://npm.pkg.github.com"
+  npm_registry_token:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        NPM_REGISTRY: ${{ inputs.npm_registry }}
+        NPM_TOKEN: ${{ inputs.npm_registry_token }}
+      run: |
+        NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
+        printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
