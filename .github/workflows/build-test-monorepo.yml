@@ -79,10 +79,17 @@ jobs:
         shell: bash
         run: |
           git fetch origin --tags --force
-          EXACT_TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+          # Prefer the tag that triggered this workflow (GITHUB_REF_NAME on a
+          # tag push). `git describe --exact-match` returns the *oldest* tag at
+          # the commit, which silently picks the wrong version when one commit
+          # carries multiple tags (e.g. moving a tag forward by re-tagging).
+          REF_TAG=""
+          if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
+            REF_TAG="${GITHUB_REF#refs/tags/}"
+          fi
           STATUS=$(git status --porcelain)
-          if [[ -n "$EXACT_TAG" && -z "$STATUS" ]]; then
-            BASE="${EXACT_TAG#v}"
+          if [[ -n "$REF_TAG" && -z "$STATUS" ]]; then
+            BASE="${REF_TAG#v}"
           else
             BASE=$(make version | tail -n 1)
             BASE="${BASE#v}"
@@ -179,7 +186,11 @@ jobs:
             fi
 
             pushd "$dir" > /dev/null
-            if ! npm publish --no-git-checks --tag "${TAG:-latest}"; then
+            # Use `pnpm publish` (not `npm publish`) so `workspace:*` deps are
+            # rewritten to the actual published version. With plain npm, the
+            # workspace protocol leaks into the registry manifest and downstream
+            # consumers resolve to whatever happened to be installed locally.
+            if ! pnpm publish --no-git-checks --tag "${TAG:-latest}"; then
               PUBLISH_EXIT=$?
               if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
                 echo "Race: $PACKAGE_ID became available during publish"
