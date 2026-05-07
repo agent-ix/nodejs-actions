@@ -54,9 +54,11 @@ runs:
         if [[ -n "$EXACT_TAG" && -z "$STATUS" ]]; then
           echo "Using exact tag version: $EXACT_TAG"
           echo "version=$EXACT_TAG" >> "$GITHUB_OUTPUT"
+          echo "is_release=true" >> "$GITHUB_OUTPUT"
         else
           echo "Using make version fallback"
           echo "version=$(make version | tail -n 1)" >> "$GITHUB_OUTPUT"
+          echo "is_release=false" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Generate image metadata
@@ -69,4 +71,5 @@ runs:
         description: ${{ steps.data.outputs.description }}
         artifact: ${{ inputs.artifact }}
         tag_prefix: ${{ inputs.tag_prefix }}
+        is_release: ${{ steps.data.outputs.is_release }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
