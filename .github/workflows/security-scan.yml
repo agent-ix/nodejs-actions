@@ -1,0 +1,36 @@
+name: Security Scan
+
+# Reusable CodeQL workflow for JS/TS repos. Repos opt in by adding a
+# .github/workflows/codeql.yml stub that calls this with `uses:`.
+# Findings land in the repo's GitHub Security > Code scanning tab.
+
+on:
+  workflow_call:
+    inputs:
+      queries:
+        description: "CodeQL query suite (default | security-extended | security-and-quality)"
+        required: false
+        type: string
+        default: "security-extended"
+
+jobs:
+  codeql:
+    name: CodeQL ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript-typescript"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: ${{ inputs.queries }}
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
