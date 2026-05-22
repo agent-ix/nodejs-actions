@@ -74,6 +74,40 @@ jobs:
           docker_repository: ${{ inputs.docker_repository }}
           github_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
 
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: ${{ inputs.npm_registry }}
+      - run: corepack enable
+      - name: Configure npm registry for CI
+        shell: bash
+        env:
+          NPM_REGISTRY: ${{ inputs.npm_registry }}
+          NPM_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
+        run: |
+          export NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
+      - name: Install packages
+        shell: bash
+        run: |
+          if [[ -f pnpm-lock.yaml ]]; then
+            pnpm install --frozen-lockfile
+          elif [[ -f package.json ]]; then
+            pnpm install
+          else
+            echo "No package manifest found; skipping audit"
+            exit 0
+          fi
+      - name: pnpm audit (production deps, high+)
+        shell: bash
+        run: |
+          [[ -f package.json ]] || { echo "no package.json; skip"; exit 0; }
+          pnpm audit --audit-level=high --prod
+
   build:
     runs-on: ubuntu-latest
     needs: metadata
