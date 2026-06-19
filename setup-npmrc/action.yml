@@ -26,6 +26,9 @@ runs:
         else
           # Token-free: resolve @agent-ix from public npm. No auth line — the
           # publish job authenticates via OIDC, and reads are unauthenticated.
-          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n' "$NPM_REGISTRY" > .npmrc
+          # provenance=false: agent-ix repos are private, where npm/pnpm cannot
+          # generate provenance attestations; disable it so the publish can't be
+          # tripped up by provenance auto-enable. (Flip to true if a repo is public.)
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\nprovenance=false\n' "$NPM_REGISTRY" > .npmrc
         fi
         git update-index --skip-worktree .npmrc 2>/dev/null || true
