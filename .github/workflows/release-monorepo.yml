@@ -102,6 +102,13 @@ jobs:
           npm_registry: ${{ inputs.npm_registry }}
           npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
 
+      # Trusted Publishing (OIDC) needs npm >= 11.5.1. We publish with `npm`
+      # (not `pnpm publish`, which does not perform the tokenless OIDC exchange
+      # and fails with ENEEDAUTH).
+      - name: Upgrade npm for Trusted Publishing
+        if: ${{ inputs.trusted_publish }}
+        run: npm install -g npm@latest
+
       - run: make install
       - run: make build
 
@@ -189,6 +196,31 @@ jobs:
             [[ -f "$f" ]] || continue
             jq --arg v "$VERSION" '.version=$v' "$f" > tmp && mv tmp "$f"
           done
+          # Rewrite workspace: protocol deps to the concrete version. `pnpm publish`
+          # does this automatically, but we publish with `npm publish` (for OIDC),
+          # which would otherwise leak `workspace:*` into the registry manifest.
+          # All packages move to one linked VERSION, so workspace:* -> VERSION.
+          for f in packages/*/package.json apps/*/package.json; do
+            [[ -f "$f" ]] || continue
+            node -e '
+              const fs = require("fs");
+              const [p, v] = process.argv.slice(1);
+              const j = JSON.parse(fs.readFileSync(p, "utf8"));
+              for (const field of ["dependencies","devDependencies","peerDependencies","optionalDependencies"]) {
+                const deps = j[field]; if (!deps) continue;
+                for (const k of Object.keys(deps)) {
+                  const val = deps[k];
+                  if (typeof val !== "string" || !val.startsWith("workspace:")) continue;
+                  const spec = val.slice("workspace:".length);
+                  if (spec === "*" || spec === "") deps[k] = v;
+                  else if (spec === "^") deps[k] = "^" + v;
+                  else if (spec === "~") deps[k] = "~" + v;
+                  else deps[k] = spec; // workspace:1.2.3 -> 1.2.3
+                }
+              }
+              fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+            ' "$f" "$VERSION"
+          done
 
       - name: Publish all packages
         shell: bash
@@ -219,11 +251,11 @@ jobs:
             fi
 
             pushd "$dir" > /dev/null
-            # Use `pnpm publish` (not `npm publish`) so `workspace:*` deps are
-            # rewritten to the actual published version. With plain npm, the
-            # workspace protocol leaks into the registry manifest and downstream
-            # consumers resolve to whatever happened to be installed locally.
-            if ! pnpm publish --no-git-checks --tag "${TAG:-latest}"; then
+            # Publish with `npm` (not `pnpm publish`): npm performs the tokenless
+            # OIDC Trusted Publishing exchange, while pnpm does not (ENEEDAUTH).
+            # workspace:* deps were already rewritten to the concrete version in
+            # the inject step above, so the registry manifest is correct.
+            if ! npm publish --no-git-checks --tag "${TAG:-latest}"; then
               PUBLISH_EXIT=$?
               if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
                 echo "Race: $PACKAGE_ID became available during publish"
