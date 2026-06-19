@@ -42,6 +42,11 @@ on:
         required: false
         type: boolean
         default: true
+      platforms:
+        description: "Target platforms for the Docker build. Set to linux/amd64,linux/arm64 for webapps that run on multiple architectures. Leave unset (linux/amd64) for TS/React package build containers."
+        required: false
+        type: string
+        default: "linux/amd64"
     secrets:
       DOCKER_REGISTRY_USER:
         description: "Docker registry username"
@@ -158,6 +163,7 @@ jobs:
           helm_chart_path: ${{ inputs.helm_chart_path }}
           helm_chart_registry: ${{ inputs.helm_chart_registry }}
           helm_chart_repository: ${{ inputs.helm_chart_repository }}
+          platforms: ${{ inputs.platforms }}
 
   test:
     if: ${{ !inputs.host_checks }}
