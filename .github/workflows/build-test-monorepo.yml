@@ -15,9 +15,18 @@ on:
         required: false
         type: string
         default: "https://npm.pkg.github.com"
+      trusted_publish:
+        # Opt-in: publish to public npm via OIDC Trusted Publishing (tokenless).
+        # pnpm >= 10 performs the OIDC token exchange (workspace:* deps are still
+        # rewritten on publish). Set npm_registry to https://registry.npmjs.org
+        # and node_version to "22" (OIDC needs Node >= 22.14) alongside this.
+        required: false
+        type: boolean
+        default: false
     secrets:
       NPM_REGISTRY_TOKEN:
-        required: true
+        # Not required when trusted_publish is true (OIDC needs no token).
+        required: false
 
 jobs:
 
@@ -73,6 +82,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: [test, lint, audit]
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for npm Trusted Publishing (no-op when token-based)
     steps:
       - uses: actions/checkout@v4
         with:
@@ -117,7 +129,8 @@ jobs:
         id: version
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          # Empty under OIDC: `npm view` reads public npm unauthenticated.
+          NODE_AUTH_TOKEN: ${{ inputs.trusted_publish && '' || secrets.NPM_REGISTRY_TOKEN }}
         run: |
           BASE="${{ steps.base.outputs.base }}"
           VERSION="$BASE"
@@ -178,7 +191,8 @@ jobs:
       - name: Publish all packages
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          # Empty under OIDC: pnpm performs the trusted-publish token exchange.
+          NODE_AUTH_TOKEN: ${{ inputs.trusted_publish && '' || secrets.NPM_REGISTRY_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.disttag.outputs.tag }}
         run: |

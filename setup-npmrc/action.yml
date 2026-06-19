@@ -6,7 +6,10 @@ inputs:
     required: false
     default: "https://npm.pkg.github.com"
   npm_registry_token:
-    required: true
+    # Optional: omit/empty for OIDC Trusted Publishing repos, which resolve
+    # @agent-ix from public npm (no auth) and publish via the OIDC exchange.
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -17,5 +20,12 @@ runs:
         NPM_TOKEN: ${{ inputs.npm_registry_token }}
       run: |
         NPM_REGISTRY_HOST=$(echo "$NPM_REGISTRY" | sed 's|https\?://||;s|/$||')
-        printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
+        if [ -n "$NPM_TOKEN" ]; then
+          # Token-based: route @agent-ix at the configured registry, with auth.
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n//%s/:_authToken=%s\n' "$NPM_REGISTRY" "$NPM_REGISTRY_HOST" "$NPM_TOKEN" > .npmrc
+        else
+          # Token-free: resolve @agent-ix from public npm. No auth line — the
+          # publish job authenticates via OIDC, and reads are unauthenticated.
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=%s\n' "$NPM_REGISTRY" > .npmrc
+        fi
         git update-index --skip-worktree .npmrc 2>/dev/null || true
