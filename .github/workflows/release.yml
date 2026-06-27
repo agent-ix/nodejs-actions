@@ -134,11 +134,15 @@ jobs:
         run: |
           git fetch origin --tags --force
           EXACT_TAG=$(git describe --tags --exact-match 2>/dev/null || true)
-          STATUS=$(git status --porcelain)
-          if [[ -n "$EXACT_TAG" && -z "$STATUS" ]]; then
+          # A tagged release uses the tag version REGARDLESS of working-tree status:
+          # `make install`/`make build` above legitimately dirty the tree (lockfile/
+          # dist churn), and the old `-z "$STATUS"` guard silently downgraded real
+          # releases to a 0.0.1 dev snapshot. A manual workflow_dispatch release uses
+          # the committed package.json version (also a real release), never a snapshot.
+          if [[ -n "$EXACT_TAG" ]]; then
             BASE="${EXACT_TAG#v}"
           else
-            BASE=$(make version | tail -n 1)
+            BASE=$(node -p "require('./package.json').version")
             BASE="${BASE#v}"
           fi
           echo "base=$BASE" >> "$GITHUB_OUTPUT"

@@ -125,8 +125,11 @@ jobs:
           if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
             REF_TAG="${GITHUB_REF#refs/tags/}"
           fi
-          STATUS=$(git status --porcelain)
-          if [[ -n "$REF_TAG" && -z "$STATUS" ]]; then
+          # A tagged release uses the tag version REGARDLESS of working-tree status —
+          # `make install`/`make build` above legitimately dirty the tree (lockfile/
+          # dist churn), and the old `-z "$STATUS"` guard silently downgraded real
+          # releases to a 0.0.1 dev snapshot.
+          if [[ -n "$REF_TAG" ]]; then
             BASE="${REF_TAG#v}"
           else
             BASE=$(make version | tail -n 1)
