@@ -200,8 +200,14 @@ jobs:
             [[ -n "$TAG" ]] && npm dist-tag add "$PACKAGE_ID" "$TAG" || true
             exit 0
           fi
-          if ! npm publish --no-git-checks --tag "${TAG:-latest}"; then
-            PUBLISH_EXIT=$?
+          # `--no-git-checks` is a pnpm flag; npm rejects it with EUNKNOWNCONFIG
+          # and publishes nothing. npm has no equivalent check to disable.
+          PUBLISH_EXIT=0
+          npm publish --tag "${TAG:-latest}" || PUBLISH_EXIT=$?
+          # Captured from the command itself, not from inside `if ! cmd`: there
+          # `$?` is the negated test's status (0), so a failed publish reported
+          # success and the job went green having published nothing.
+          if [[ "$PUBLISH_EXIT" -ne 0 ]]; then
             if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
               echo "Race: became available during publish"
             else

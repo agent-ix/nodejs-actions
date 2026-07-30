@@ -258,8 +258,14 @@ jobs:
             # OIDC Trusted Publishing exchange, while pnpm does not (ENEEDAUTH).
             # workspace:* deps were already rewritten to the concrete version in
             # the inject step above, so the registry manifest is correct.
-            if ! npm publish --no-git-checks --tag "${TAG:-latest}"; then
-              PUBLISH_EXIT=$?
+            # `--no-git-checks` is a pnpm flag; npm rejects it with
+            # EUNKNOWNCONFIG and publishes nothing. npm has no equivalent.
+            PUBLISH_EXIT=0
+            npm publish --tag "${TAG:-latest}" || PUBLISH_EXIT=$?
+            # Captured from the command itself, not from inside `if ! cmd`:
+            # there `$?` is the negated test's status (0), so a failed publish
+            # reported success and the job went green having published nothing.
+            if [[ "$PUBLISH_EXIT" -ne 0 ]]; then
               if npm view "$PACKAGE_ID" > /dev/null 2>&1; then
                 echo "Race: $PACKAGE_ID became available during publish"
               else
