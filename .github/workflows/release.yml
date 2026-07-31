@@ -43,6 +43,11 @@ on:
       NPM_REGISTRY_TOKEN:
         # Not required when trusted_publish is true (OIDC needs no token).
         required: false
+      NPM_TOKEN:
+        # The org provisions its npm credential under this name. Declared so a
+        # caller using `secrets: inherit` passes it through; either name works
+        # and NPM_TOKEN wins when both are set.
+        required: false
       DOCKER_REGISTRY_USER:
         required: false
       DOCKER_REGISTRY_PASSWORD:
@@ -62,7 +67,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
           npm_registry: ${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          npm_registry_token: ${{ secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN }}
       - run: make install
       - run: make test
 
@@ -78,7 +83,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
           npm_registry: ${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          npm_registry_token: ${{ secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN }}
       - run: make install
       - run: make lint
 
@@ -94,7 +99,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
           npm_registry: ${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          npm_registry_token: ${{ secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN }}
       - run: make install
       - name: pnpm audit (production deps, high+)
         run: pnpm audit --audit-level=high --prod
@@ -118,7 +123,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
           npm_registry: ${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          npm_registry_token: ${{ secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN }}
 
       # Trusted Publishing (OIDC) needs npm >= 11.5.1.
       - name: Upgrade npm for Trusted Publishing
@@ -152,7 +157,7 @@ jobs:
         shell: bash
         env:
           # Empty under OIDC: `npm view` reads public npm unauthenticated.
-          NODE_AUTH_TOKEN: ${{ inputs.trusted_publish && '' || secrets.NPM_REGISTRY_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ inputs.trusted_publish && '' || (secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN) }}
         run: |
           BASE="${{ steps.base.outputs.base }}"
           PKG_NAME=$(node -p "require('./package.json').name")
@@ -188,7 +193,7 @@ jobs:
         shell: bash
         env:
           # Empty under OIDC: npm performs the trusted-publish token exchange.
-          NODE_AUTH_TOKEN: ${{ inputs.trusted_publish && '' || secrets.NPM_REGISTRY_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ inputs.trusted_publish && '' || (secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN) }}
           PACKAGE_ID: ${{ steps.version.outputs.package_id }}
           TAG: ${{ steps.disttag.outputs.tag }}
         run: |

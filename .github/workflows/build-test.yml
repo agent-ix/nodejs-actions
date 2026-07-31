@@ -59,7 +59,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
           npm_registry: ${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          npm_registry_token: ${{ secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN }}
       - run: make install
       - run: make test
 
@@ -75,7 +75,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
           npm_registry: ${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          npm_registry_token: ${{ secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN }}
       - run: make install
       - run: make lint
 
@@ -91,7 +91,7 @@ jobs:
       - uses: agent-ix/nodejs-actions/setup-npmrc@main
         with:
           npm_registry: ${{ inputs.npm_registry }}
-          npm_registry_token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+          npm_registry_token: ${{ secrets.NPM_TOKEN != '' && secrets.NPM_TOKEN || secrets.NPM_REGISTRY_TOKEN }}
       - run: make install
       - name: pnpm audit (production deps, high+)
         run: pnpm audit --audit-level=high --prod
