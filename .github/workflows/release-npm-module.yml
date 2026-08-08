@@ -1,0 +1,65 @@
+name: Release npm module
+
+# Reusable PUBLISH pipeline for data-only Filament module repos (spec-artifacts-*,
+# spec-objects-*). Those packages ship a manifest + schemas + skeletons with no
+# build or test toolchain, so this is a publish-only reusable — unlike the sibling
+# release.yml, which runs the full TS test/lint/audit gate first.
+#
+# Publishing is tokenless via OIDC Trusted Publishing. Callers must name their
+# workflow file release-npm.yml, since that filename is what npm Trusted
+# Publishing matches on, and must grant `id-token: write`.
+#
+# Version comes from the tag (or the caller's explicit input); these packages
+# carry "version": "0.0.0-managed" in package.json and are never hand-bumped.
+# The caller repo's own `prepack` (scripts/stage-npm.mjs) flattens the module
+# payload to the tarball root during publish.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.9.0); defaults to the triggering vX.Y.Z tag"
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # tokenless OIDC Trusted Publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22" # OIDC Trusted Publishing requires Node >= 22.14
+          # Deliberately no registry-url: setup-node would write an .npmrc
+          # containing _authToken=${NODE_AUTH_TOKEN}, and that token line makes
+          # npm authenticate by token instead of performing the OIDC exchange.
+
+      # setup-node ships npm 10.x, which cannot do Trusted Publishing at all.
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@latest
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          V="${{ inputs.version }}"
+          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Set package.json version
+        run: npm version --no-git-tag-version --allow-same-version "${{ steps.ver.outputs.version }}"
+
+      # Route @agent-ix at public npm with no auth token, so `npm publish`
+      # performs the tokenless OIDC token exchange. Written to $HOME so nothing
+      # is left in the caller's working tree.
+      - name: Configure npm for public npm
+        # provenance=false: agent-ix repos are private, where npm cannot generate
+        # provenance attestations; leaving it on fails the publish.
+        run: printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\nprovenance=false\n' > "$HOME/.npmrc"
+
+      - name: Publish to npm
+        run: npm publish --access public
