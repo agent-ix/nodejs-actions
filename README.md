@@ -1,5 +1,7 @@
 # Node.js Actions
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/6qsdhSPE)
+
 Reusable GitHub workflows and composite actions for Node.js / TypeScript
 repos in the agent-ix ecosystem.
 
