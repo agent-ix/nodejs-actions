@@ -23,7 +23,7 @@ Node.js Actions provides reusable GitHub Actions for Node.js build, test, and pu
 This specification covers the reusable workflows and composite actions published from this repository:
 
 - **Callable workflows**: `build-test.yml` (library, non-docker CI: parallel `test`/`lint` jobs plus npm `publish`), `build-test-app.yml` (application CI: Docker runtime image, optional OCI Helm chart, in-image `test`/`eslint`/`prettier`, then npm + image publish), `build-test-monorepo.yml`, and `security-scan.yml`.
-- **Composite actions**: `setup-npmrc` (writes a CI `.npmrc` scoping `@agent-ix` to the configured registry), `image-metadata` (generates `image.json` for the dev container and resolves tags), and the in-image runners `test`, `eslint`, `prettier`, and `publish`.
+- **Composite actions**: `setup-npmrc` (writes a CI `.npmrc` scoping `@agent-ix` to the configured registry), `image-metadata` (generates `image.json` for the dev container and resolves tags), the in-image runners `test`, `eslint`, `prettier`, and `publish`, and `publish-native-npm` (publishes a prebuilt native Rust CLI to public npmjs as a launcher package plus per-platform binary packages; the org's shared replacement for `agent-ix/quire-cli`'s repo-local distribution tooling).
 
 Out of scope: the build logic of consumer repositories themselves (each repo owns its `make install`/`make test`/`make lint`/`make build`/`make version` targets and Dockerfile), the registries and clusters these actions target, and any non-Node.js CI tooling.
 
@@ -50,5 +50,6 @@ Detailed requirement artifacts live alongside this master specification under `s
 
 - Repository README: `nodejs-actions/README.md` — workflow catalog, inputs, secrets, and usage examples.
 - Callable workflows: `.github/workflows/build-test.yml`, `.github/workflows/build-test-app.yml`, `.github/workflows/build-test-monorepo.yml`, `.github/workflows/security-scan.yml`.
-- Composite actions: `setup-npmrc/action.yml`, `image-metadata/action.yml`, `test/action.yml`, `eslint/action.yml`, `prettier/action.yml`, `publish/action.yml`.
+- Composite actions: `setup-npmrc/action.yml`, `image-metadata/action.yml`, `test/action.yml`, `eslint/action.yml`, `prettier/action.yml`, `publish/action.yml`, `publish-native-npm/action.yml`.
+- [FR-001](./functional/FR-001-publish-native-npm-action.md): `publish-native-npm` composite action.
 - GitHub Actions reusable workflows documentation: <https://docs.github.com/actions/using-workflows/reusing-workflows>.

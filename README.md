@@ -117,6 +117,107 @@ the named command inside it, plus image-metadata for version resolution
 and publish for npm release. Not intended for direct use by repos; call
 `build-test-app.yml` instead.
 
+### `publish-native-npm`
+Publishes a prebuilt native (Rust) CLI to public npmjs as a launcher package
+plus one per-platform binary package per built target. This is the org's
+shared, generic replacement for `agent-ix/quire-cli`'s repo-local
+`tools/quire-dist` and `npm/quire-cli/bin/quire.js` — every project-specific
+detail (package name, binary name, repository, license, description) comes
+from inputs.
+
+The caller is responsible for building the native binaries first (one Rust
+target triple per subdirectory of `artifacts-dir`) and for providing a
+`LICENSE` file at the repository root.
+
+**Inputs:**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `package` | Yes | — | Launcher package name, e.g. `@agent-ix/quoin`. Platform packages are named `<package>-<os>-<cpu>`. |
+| `binary` | Yes | — | Binary name, e.g. `quoin`. On win32 the file is `<binary>.exe`. |
+| `version` | Yes | — | Release version, `X.Y.Z` with no leading `v`. |
+| `artifacts-dir` | No | `artifacts` | Directory containing only subdirectories named by Rust target triple, each holding exactly one file, `<binary>` or `<binary>.exe`. |
+| `repository` | Yes | — | GitHub `owner/repo`, e.g. `agent-ix/quoin`. Used for `homepage` and `repository.url`. |
+| `license` | No | `AGPL-3.0-or-later` | SPDX identifier written into every generated `package.json`. A `LICENSE` file is also required at `$GITHUB_WORKSPACE/LICENSE` and is copied into every package. |
+| `description` | Yes | — | Description written into the launcher `package.json`. |
+| `self-update-command` | No | `""` | When set, the launcher intercepts this subcommand and prints an "update with npm" hint instead of spawning the binary. |
+| `publish` | No | `"false"` | When `"false"`, generate packages and print manifests + `npm pack --dry-run` listings, then stop. Set `"true"` to actually publish. |
+| `npm-token` | No | `""` | npm auth token, available to every publish in the run. npm prefers the OIDC exchange when the calling job has `permissions: id-token: write`, so trusted-publisher packages publish tokenlessly regardless of this input; it only matters for a package without a trusted publisher yet, e.g. its first publish. When empty, the calling job must grant `permissions: id-token: write` or the publish step fails early. |
+| `out-dir` | No | `npm-dist` | Directory to write the generated packages into. Refused if it resolves to the workspace root, `/`, `$HOME`, an ancestor of the workspace, or a path equal to or containing `artifacts-dir`. |
+
+Supported Rust targets: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`,
+`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`,
+`aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc`.
+
+`artifacts-dir` must contain only subdirectories named by Rust target triple,
+each holding exactly one file, `<binary>` or `<binary>.exe`, so an artifact
+download step that lands files elsewhere (e.g. one subdirectory per uploaded
+artifact name) must be normalized into that shape first.
+
+**Example** (`workflow_dispatch` on a release tag, downloading the built
+binaries from the matching GitHub Release):
+
+```yaml
+name: Publish native npm package
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v1.2.3"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version from tag
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release download "$TAG" --repo agent-ix/quoin --pattern 'quoin-*.tar.gz' --dir release-assets
+
+      - name: Normalize into artifacts/<rust-target>/<binary>
+        run: |
+          set -euo pipefail
+          for asset in release-assets/quoin-*.tar.gz; do
+            target=$(basename "$asset" .tar.gz)
+            target=${target#quoin-}
+            mkdir -p "artifacts/$target"
+            tar -xzf "$asset" -C "artifacts/$target"
+          done
+
+      - uses: agent-ix/nodejs-actions/publish-native-npm@main
+        with:
+          package: "@agent-ix/quoin"
+          binary: quoin
+          version: ${{ steps.version.outputs.version }}
+          repository: agent-ix/quoin
+          description: "The quoin CLI"
+          self-update-command: update
+          publish: "true"
+          npm-token: ${{ secrets.NPM_TOKEN }}
+```
+
+Each release asset here is assumed to be named `quoin-<rust-target>.tar.gz`
+and to extract to a single `quoin`/`quoin.exe` file — adjust the download and
+normalize steps to match how your own release workflow names and shapes its
+assets. `permissions: id-token: write` is required on the calling job:
+without it, and without `npm-token`, the action fails fast rather than
+attempting a publish that can never authenticate.
+
 ---
 
 ## Versioning

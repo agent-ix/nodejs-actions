@@ -1,0 +1,143 @@
+name: "Publish native npm package"
+description: >-
+  Publishes a prebuilt native (Rust) CLI to public npmjs as a launcher
+  package plus per-platform binary packages.
+
+inputs:
+  package:
+    description: 'Launcher package name, e.g. "@agent-ix/quoin". Platform packages are named "<package>-<os>-<cpu>".'
+    required: true
+  binary:
+    description: 'Binary name, e.g. "quoin". On win32 the file is "<binary>.exe".'
+    required: true
+  version:
+    description: "Release version, X.Y.Z with no leading v."
+    required: true
+  artifacts-dir:
+    description: >-
+      Directory containing ONLY subdirectories named by Rust target triple,
+      each holding exactly one file, <binary> or <binary>.exe.
+    required: false
+    default: "artifacts"
+  repository:
+    description: 'GitHub "owner/repo", e.g. "agent-ix/quoin". Used for homepage and repository.url.'
+    required: true
+  license:
+    description: "SPDX license identifier written into every generated package.json."
+    required: false
+    default: "AGPL-3.0-or-later"
+  description:
+    description: "Description written into the launcher package.json."
+    required: true
+  self-update-command:
+    description: >-
+      When set, the launcher intercepts this subcommand and prints an
+      "update with npm" hint instead of spawning the binary.
+    required: false
+    default: ""
+  publish:
+    description: 'When "false" (default), generate packages and print manifests + "npm pack --dry-run" listings, then stop.'
+    required: false
+    default: "false"
+  npm-token:
+    description: >-
+      npm auth token. Available to every publish in the run, but npm prefers
+      the OIDC exchange when the calling job has "permissions: id-token:
+      write", so trusted-publisher packages publish tokenlessly regardless of
+      this input. Only matters for a package without a trusted publisher
+      configured yet, e.g. its first publish. When empty, the calling job
+      must grant "permissions: id-token: write" or the publish step fails
+      early.
+    required: false
+    default: ""
+  out-dir:
+    description: "Directory to write the generated packages into."
+    required: false
+    default: "npm-dist"
+
+runs:
+  using: "composite"
+  steps:
+    # OIDC contract (see CLAUDE.md): no registry-url on setup-node, and npm
+    # must be upgraded to >=11.5.1 for Trusted Publishing support before any
+    # npm command that might publish runs.
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22.15.0"
+
+    - name: Install pinned npm
+      shell: bash
+      run: npm install -g npm@11.6.2
+
+    - name: Write npm auth config
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.npm-token }}
+        NPMRC_PATH: ${{ runner.temp }}/publish-native-npm.npmrc
+      run: |
+        if [ -n "$NPM_TOKEN" ]; then
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=%s\nprovenance=false\n' "$NPM_TOKEN" > "$NPMRC_PATH"
+        else
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\nprovenance=false\n' > "$NPMRC_PATH"
+        fi
+
+    - name: Require OIDC permission when publishing without npm-token
+      if: ${{ inputs.publish == 'true' }}
+      shell: bash
+      env:
+        IN_NPM_TOKEN: ${{ inputs.npm-token }}
+      run: |
+        if [ -z "$IN_NPM_TOKEN" ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::publish-native-npm: publish is true, npm-token is empty, and this job has no OIDC token request URL. Add 'permissions: { id-token: write }' to the calling job (see README.md), or pass npm-token."
+          exit 1
+        fi
+
+    - name: Generate packages
+      shell: bash
+      # Inputs reach the script through env, never interpolated into it.
+      env:
+        IN_PACKAGE: ${{ inputs.package }}
+        IN_BINARY: ${{ inputs.binary }}
+        IN_VERSION: ${{ inputs.version }}
+        IN_ARTIFACTS_DIR: ${{ inputs.artifacts-dir }}
+        IN_REPOSITORY: ${{ inputs.repository }}
+        IN_LICENSE: ${{ inputs.license }}
+        IN_DESCRIPTION: ${{ inputs.description }}
+        IN_SELF_UPDATE_COMMAND: ${{ inputs.self-update-command }}
+        IN_OUT_DIR: ${{ inputs.out-dir }}
+        IN_PUBLISH: ${{ inputs.publish }}
+        NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/publish-native-npm.npmrc
+      run: |
+        node "$GITHUB_ACTION_PATH/pack.mjs" generate \
+          --package "$IN_PACKAGE" \
+          --binary "$IN_BINARY" \
+          --version "$IN_VERSION" \
+          --artifacts-dir "$IN_ARTIFACTS_DIR" \
+          --repository "$IN_REPOSITORY" \
+          --license "$IN_LICENSE" \
+          --license-file "$GITHUB_WORKSPACE/LICENSE" \
+          --description "$IN_DESCRIPTION" \
+          --self-update-command "$IN_SELF_UPDATE_COMMAND" \
+          --out-dir "$IN_OUT_DIR" \
+          --publish "$IN_PUBLISH"
+
+    - name: Publish and verify
+      if: ${{ inputs.publish == 'true' }}
+      shell: bash
+      env:
+        IN_PACKAGE: ${{ inputs.package }}
+        IN_VERSION: ${{ inputs.version }}
+        IN_OUT_DIR: ${{ inputs.out-dir }}
+        NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/publish-native-npm.npmrc
+      run: |
+        node "$GITHUB_ACTION_PATH/pack.mjs" publish \
+          --package "$IN_PACKAGE" \
+          --version "$IN_VERSION" \
+          --out-dir "$IN_OUT_DIR"
+
+    - name: Remove npm auth config
+      if: always()
+      shell: bash
+      env:
+        NPMRC_PATH: ${{ runner.temp }}/publish-native-npm.npmrc
+      run: rm -f "$NPMRC_PATH"

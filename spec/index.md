@@ -8,4 +8,5 @@ okf_version: "0.1"
 
 ## Contents
 
+* [Functional](./functional/index.md) - Functional artifacts.
 * [Spec](./spec.md)
