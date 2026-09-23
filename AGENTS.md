@@ -42,8 +42,12 @@ a package that plainly exists. That is npm rejecting an unauthorized write, not 
 missing package.
 
 Publishing is owned by three reusable workflows here — `release.yml` (TS packages),
-`release-monorepo.yml`, and `release-npm-module.yml` (data-only module repos). Callers
-stay thin; do not inline a publish job in a consumer repo.
+`release-monorepo.yml`, and `release-npm-module.yml` (data-only module repos) — plus
+the `publish-native-npm` composite action for native-binary (prebuilt Rust CLI)
+packages, called directly by a consumer repo's own release job rather than via
+`uses: .../.github/workflows/...@main`. Callers stay thin: call a reusable workflow,
+or call `publish-native-npm` from a small job that builds the binaries and hands it
+the artifacts directory; do not inline a publish job in a consumer repo.
 
 ### Sweeps
 
@@ -59,8 +63,12 @@ Who has inlined a publish instead of calling a reusable:
 grep -l "npm publish\|pnpm publish" ~/dev/*/.github/workflows/*.yml | grep -v nodejs-actions
 ```
 
-Expect exactly two hits: `quire-wasm` (wasm-pack) and `quire-cli` (per-platform
-binaries) — Rust repos that cannot use a Node reusable. Anything else has drifted.
+Expect exactly two hits today: `quire-wasm` (wasm-pack, a genuinely different publish
+mechanism) and `quire-cli` (per-platform binaries). `quire-cli`'s inline publish is a
+migration candidate for `publish-native-npm`, not a standing exception — that action
+exists precisely so a Rust repo does not have to inline its own npm-publish logic.
+Once `quire-cli` moves to it, only `quire-wasm` should remain. Anything else has
+drifted.
 
 ### A green run is not proof of publication
 
