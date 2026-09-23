@@ -40,7 +40,14 @@ inputs:
     required: false
     default: "false"
   npm-token:
-    description: "npm auth token, used only for the first publish of a package that does not exist yet."
+    description: >-
+      npm auth token. Available to every publish in the run, but npm prefers
+      the OIDC exchange when the calling job has "permissions: id-token:
+      write", so trusted-publisher packages publish tokenlessly regardless of
+      this input. Only matters for a package without a trusted publisher
+      configured yet, e.g. its first publish. When empty, the calling job
+      must grant "permissions: id-token: write" or the publish step fails
+      early.
     required: false
     default: ""
   out-dir:
@@ -66,11 +73,23 @@ runs:
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.npm-token }}
+        NPMRC_PATH: ${{ runner.temp }}/publish-native-npm.npmrc
       run: |
         if [ -n "$NPM_TOKEN" ]; then
-          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=%s\nprovenance=false\n' "$NPM_TOKEN" > "$HOME/.npmrc"
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=%s\nprovenance=false\n' "$NPM_TOKEN" > "$NPMRC_PATH"
         else
-          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\nprovenance=false\n' > "$HOME/.npmrc"
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\nprovenance=false\n' > "$NPMRC_PATH"
+        fi
+
+    - name: Require OIDC permission when publishing without npm-token
+      if: ${{ inputs.publish == 'true' }}
+      shell: bash
+      env:
+        IN_NPM_TOKEN: ${{ inputs.npm-token }}
+      run: |
+        if [ -z "$IN_NPM_TOKEN" ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::publish-native-npm: publish is true, npm-token is empty, and this job has no OIDC token request URL. Add 'permissions: { id-token: write }' to the calling job (see README.md), or pass npm-token."
+          exit 1
         fi
 
     - name: Generate packages
@@ -87,6 +106,7 @@ runs:
         IN_SELF_UPDATE_COMMAND: ${{ inputs.self-update-command }}
         IN_OUT_DIR: ${{ inputs.out-dir }}
         IN_PUBLISH: ${{ inputs.publish }}
+        NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/publish-native-npm.npmrc
       run: |
         node "$GITHUB_ACTION_PATH/pack.mjs" generate \
           --package "$IN_PACKAGE" \
@@ -108,8 +128,16 @@ runs:
         IN_PACKAGE: ${{ inputs.package }}
         IN_VERSION: ${{ inputs.version }}
         IN_OUT_DIR: ${{ inputs.out-dir }}
+        NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/publish-native-npm.npmrc
       run: |
         node "$GITHUB_ACTION_PATH/pack.mjs" publish \
           --package "$IN_PACKAGE" \
           --version "$IN_VERSION" \
           --out-dir "$IN_OUT_DIR"
+
+    - name: Remove npm auth config
+      if: always()
+      shell: bash
+      env:
+        NPMRC_PATH: ${{ runner.temp }}/publish-native-npm.npmrc
+      run: rm -f "$NPMRC_PATH"

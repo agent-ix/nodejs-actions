@@ -17,6 +17,7 @@
 //   node pack.mjs publish --package <pkg> --version <x.y.z> --out-dir <dir>
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -212,6 +213,51 @@ export function discoverArtifacts(artifactsDir, binaryName) {
 }
 
 // ---------------------------------------------------------------------------
+// out-dir safety: refuse to point the generated-package tree somewhere that
+// would make `fs.rmSync(outDir, { recursive: true, force: true })` dangerous.
+// ---------------------------------------------------------------------------
+
+/** True when `child` is `parent` itself or a path nested under it. */
+function isSameOrDescendant(parent, child) {
+  if (parent === child) return true;
+  const rel = path.relative(parent, child);
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+/**
+ * Refuse an out-dir that resolves to the workspace root, the filesystem
+ * root, `$HOME`, an ancestor of the workspace, or a path equal to or
+ * containing `artifacts-dir`. Called before `generate()` writes anything.
+ */
+export function assertSafeOutDir({ outDir, artifactsDir, workspaceDir = process.cwd(), homeDir = os.homedir() }) {
+  const resolvedWorkspace = path.resolve(workspaceDir);
+  const resolvedOut = path.resolve(resolvedWorkspace, outDir);
+  const resolvedArtifacts = path.resolve(resolvedWorkspace, artifactsDir);
+  const resolvedHome = homeDir ? path.resolve(homeDir) : null;
+  const filesystemRoot = path.parse(resolvedOut).root;
+
+  if (resolvedOut === filesystemRoot) {
+    throw new PackError(`out-dir ${JSON.stringify(outDir)} resolves to the filesystem root (${resolvedOut}); refusing`);
+  }
+  if (resolvedHome && resolvedOut === resolvedHome) {
+    throw new PackError(`out-dir ${JSON.stringify(outDir)} resolves to $HOME (${resolvedHome}); refusing`);
+  }
+  if (resolvedOut === resolvedWorkspace) {
+    throw new PackError(`out-dir ${JSON.stringify(outDir)} resolves to the workspace root (${resolvedWorkspace}); refusing`);
+  }
+  if (isSameOrDescendant(resolvedOut, resolvedWorkspace)) {
+    throw new PackError(
+      `out-dir ${JSON.stringify(outDir)} (${resolvedOut}) is an ancestor of the workspace (${resolvedWorkspace}); refusing`
+    );
+  }
+  if (isSameOrDescendant(resolvedOut, resolvedArtifacts)) {
+    throw new PackError(
+      `out-dir ${JSON.stringify(outDir)} (${resolvedOut}) is equal to or contains artifacts-dir ${JSON.stringify(artifactsDir)} (${resolvedArtifacts}); refusing`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Manifest builders. Key order is fixed so output is byte-identical across
 // runs given identical inputs.
 // ---------------------------------------------------------------------------
@@ -309,6 +355,8 @@ export function generate({
   description,
   selfUpdateCommand,
   outDir,
+  workspaceDir,
+  homeDir,
 }) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new PackError(`version ${JSON.stringify(version)} must be X.Y.Z with no leading v`);
@@ -324,6 +372,12 @@ export function generate({
   // Full validation happens before any write to outDir, so a refusal here
   // leaves outDir untouched.
   const artifacts = discoverArtifacts(artifactsDir, binaryName);
+  assertSafeOutDir({
+    outDir,
+    artifactsDir,
+    ...(workspaceDir !== undefined ? { workspaceDir } : {}),
+    ...(homeDir !== undefined ? { homeDir } : {}),
+  });
 
   const homepage = `https://github.com/${repositorySlug}#readme`;
   const repositoryUrl = `git+https://github.com/${repositorySlug}.git`;
@@ -392,18 +446,63 @@ function registryFlag(name) {
   return scope ? `--@${scope}:registry=${REGISTRY}` : `--registry=${REGISTRY}`;
 }
 
-function npmViewVersion(name, version) {
+/** True when npm's failure output means "this name@version has never been published", not a real error. */
+function isUnpublishedResponse(output) {
+  return /\bE404\b/.test(output) || /is not in this registry/.test(output) || /No match found/.test(output);
+}
+
+/**
+ * Returns the published version string, or `null` when npm positively
+ * reports the spec as unpublished (404 / "is not in this registry" / "No
+ * match found"). Any other failure (network, 5xx, auth, ...) throws rather
+ * than being treated as "unpublished" — a transient failure here must never
+ * be mistaken for "safe to publish".
+ */
+export function npmViewVersion(name, version) {
   const spec = `${name}@${version}`;
   const result = spawnSync("npm", ["view", spec, "version", registryFlag(name)], { encoding: "utf8" });
   if (result.status === 0) {
     return result.stdout.trim();
   }
-  return null;
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  if (isUnpublishedResponse(output)) {
+    return null;
+  }
+  throw new PackError(`npm view ${spec} failed (exit ${result.status}): ${output.trim() || "no output"}`);
 }
 
-function publishOne(pkg, version) {
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Resolve whether `name@version` is already published, retrying on a
+ * transient `npmViewVersion` failure (never on a confirmed "unpublished").
+ * Exhausting the retries fails loudly rather than falling through to a
+ * publish attempt against unknown registry state.
+ */
+export async function resolvePublishedVersion(name, version, options = {}) {
+  const { attempts = 3, delayMs = 2000 } = options;
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return npmViewVersion(name, version);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await delay(delayMs);
+      }
+    }
+  }
+  throw new PackError(
+    `could not determine whether ${name}@${version} is already published, after ${attempts} attempt(s): ${lastError.message}`
+  );
+}
+
+export async function publishOne(pkg, version, options = {}) {
   const spec = `${pkg.name}@${version}`;
-  if (npmViewVersion(pkg.name, version) === version) {
+  const current = await resolvePublishedVersion(pkg.name, version, options.resolve);
+  if (current === version) {
     console.log(`already published, skipping: ${spec}`);
     return;
   }
@@ -414,16 +513,27 @@ function publishOne(pkg, version) {
   }
 }
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function verifyPublished(name, version) {
+/**
+ * Poll the registry until `name@version` resolves, backing off
+ * exponentially, to absorb npm propagation lag after a publish. `options`
+ * makes the backoff and deadline injectable so tests do not need to wait on
+ * real wall-clock delays. A transient `npmViewVersion` failure here is
+ * treated the same as "not visible yet" — the deadline is what ultimately
+ * turns a stuck registry into a loud failure.
+ */
+export async function verifyPublished(name, version, options = {}) {
+  const { initialDelayMs = 2000, maxDelayMs = 20_000, deadlineMs = 120_000 } = options;
   const spec = `${name}@${version}`;
-  const deadline = Date.now() + 120_000;
-  let wait = 2000;
+  const deadline = Date.now() + deadlineMs;
+  let wait = initialDelayMs;
   for (;;) {
-    if (npmViewVersion(name, version) === version) {
+    let current;
+    try {
+      current = npmViewVersion(name, version);
+    } catch (_error) {
+      current = null;
+    }
+    if (current === version) {
       console.log(`verified ${spec}`);
       return;
     }
@@ -431,7 +541,7 @@ async function verifyPublished(name, version) {
       throw new PackError(`${spec} did not resolve on ${REGISTRY} within the retry window`);
     }
     await delay(wait);
-    wait = Math.min(wait * 2, 20_000);
+    wait = Math.min(wait * 2, maxDelayMs);
   }
 }
 
@@ -452,20 +562,22 @@ function listGeneratedPackageDirs(outDir) {
   return results;
 }
 
-export async function publishAll({ packageName, version, outDir }) {
+export async function publishAll({ packageName, version, outDir, publishOptions, verifyOptions }) {
   const dirs = listGeneratedPackageDirs(outDir);
   const launcherDir = dirs.find((pkg) => pkg.name === packageName);
   if (!launcherDir) {
     throw new PackError(`launcher package ${packageName} not found under ${outDir}`);
   }
   const platformDirs = dirs.filter((pkg) => pkg.name !== packageName);
+  // Platform packages first: the launcher's optionalDependencies reference
+  // them at this exact version, so it must never resolve before they exist.
   const ordered = [...platformDirs, launcherDir];
 
   for (const pkg of ordered) {
-    publishOne(pkg, version);
+    await publishOne(pkg, version, publishOptions);
   }
   for (const pkg of ordered) {
-    await verifyPublished(pkg.name, version);
+    await verifyPublished(pkg.name, version, verifyOptions);
   }
 }
 

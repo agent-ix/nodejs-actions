@@ -11,12 +11,14 @@
 //   - Resolve `<name>-<platform>-<arch>/bin/<binary>[.exe]` via
 //     require.resolve, restricted to declared optionalDependencies.
 //   - chmod 0755 best-effort on POSIX, then spawn with inherited stdio.
+//   - Forward SIGINT/SIGTERM/SIGHUP received by the launcher to the child.
 //   - Mirror the child's exit status, or re-raise its terminating signal.
 //   - If nativeLauncher.selfUpdateCommand is set and matches argv[2], print
 //     an update hint and exit 1 without spawning anything.
 
-const { spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const packageJson = require("../package.json");
 
 const PLATFORM = process.platform; // 'linux' | 'darwin' | 'win32' | ...
@@ -61,7 +63,9 @@ function resolveBinary() {
     throw new Error(
       `${NAME}: the prebuilt binary package "${pkg}" is not installed.\n` +
         `It is an optional dependency — reinstall without --no-optional, or\n` +
-        `add "${pkg}" explicitly. (--ignore-optional / CPU-VM mismatches skip it.)`
+        `add "${pkg}" explicitly. (--ignore-optional / CPU-VM mismatches skip\n` +
+        `it, and so does a prebuilt package that does not match this\n` +
+        `system's libc, e.g. a glibc build installed on a musl system.)`
     );
   }
 }
@@ -84,15 +88,51 @@ if (PLATFORM !== "win32") {
   }
 }
 
-const result = spawnSync(bin, process.argv.slice(2), { stdio: "inherit" });
+const FORWARD_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"];
 
-if (result.error) {
-  process.stderr.write(`${NAME}: failed to launch binary: ${result.error.message}\n`);
+const child = spawn(bin, process.argv.slice(2), { stdio: "inherit" });
+
+function forwardSignal(signal) {
+  try {
+    child.kill(signal);
+  } catch (_) {
+    /* the child may already have exited */
+  }
+}
+
+for (const signal of FORWARD_SIGNALS) {
+  process.on(signal, forwardSignal);
+}
+
+function stopForwardingSignals() {
+  for (const signal of FORWARD_SIGNALS) {
+    process.removeListener(signal, forwardSignal);
+  }
+}
+
+child.on("error", (err) => {
+  stopForwardingSignals();
+  process.stderr.write(`${NAME}: failed to launch binary: ${err.message}\n`);
   process.exit(1);
-}
-if (result.signal) {
-  // Re-raise the child's terminating signal so callers observe the same
-  // signal-driven exit.
-  process.kill(process.pid, result.signal);
-}
-process.exit(result.status === null ? 1 : result.status);
+});
+
+child.on("exit", (code, signal) => {
+  stopForwardingSignals();
+
+  if (signal) {
+    // Re-raise the child's terminating signal so callers observe the same
+    // signal-driven exit. For a signal whose default disposition is to
+    // terminate (SIGTERM, SIGINT, SIGHUP, ...) this ends the process right
+    // here. For one Node ignores by default (e.g. SIGPIPE), execution
+    // continues past the kill call, so fall back to the shell-convention
+    // exit code (128 + signal number).
+    process.kill(process.pid, signal);
+    setImmediate(() => {
+      const signalNumber = os.constants.signals[signal];
+      process.exit(128 + (typeof signalNumber === "number" ? signalNumber : 0));
+    });
+    return;
+  }
+
+  process.exit(code === null ? 1 : code);
+});

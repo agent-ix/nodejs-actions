@@ -5,6 +5,7 @@ import path from "node:path";
 
 import {
   TARGETS,
+  assertSafeOutDir,
   discoverArtifacts,
   generate,
   launcherPackageJson,
@@ -87,6 +88,57 @@ test("platformPackageJson: darwin and win32 packages omit libc entirely", () => 
     });
     assert.equal("libc" in pkg, false, `${rust} package must not declare libc`);
   }
+});
+
+test("platformPackageJson: aarch64-unknown-linux-gnu maps to linux/arm64/glibc", () => {
+  const pkg = platformPackageJson({
+    target: target("aarch64-unknown-linux-gnu"),
+    packageName: "@agent-ix/quoin",
+    binaryName: "quoin",
+    version: "1.2.3",
+    description: "x",
+    homepage: "https://github.com/agent-ix/quoin#readme",
+    repositoryUrl: "git+https://github.com/agent-ix/quoin.git",
+    license: "AGPL-3.0-or-later",
+  });
+  assert.equal(pkg.name, "@agent-ix/quoin-linux-arm64");
+  assert.deepEqual(pkg.os, ["linux"]);
+  assert.deepEqual(pkg.cpu, ["arm64"]);
+  assert.deepEqual(pkg.libc, ["glibc"]);
+});
+
+test("platformPackageJson: x86_64-unknown-linux-musl maps to linux/x64/musl", () => {
+  const pkg = platformPackageJson({
+    target: target("x86_64-unknown-linux-musl"),
+    packageName: "@agent-ix/quoin",
+    binaryName: "quoin",
+    version: "1.2.3",
+    description: "x",
+    homepage: "https://github.com/agent-ix/quoin#readme",
+    repositoryUrl: "git+https://github.com/agent-ix/quoin.git",
+    license: "AGPL-3.0-or-later",
+  });
+  assert.equal(pkg.name, "@agent-ix/quoin-linux-x64");
+  assert.deepEqual(pkg.os, ["linux"]);
+  assert.deepEqual(pkg.cpu, ["x64"]);
+  assert.deepEqual(pkg.libc, ["musl"]);
+});
+
+test("platformPackageJson: x86_64-apple-darwin maps to darwin/x64, no libc key", () => {
+  const pkg = platformPackageJson({
+    target: target("x86_64-apple-darwin"),
+    packageName: "@agent-ix/quoin",
+    binaryName: "quoin",
+    version: "1.2.3",
+    description: "x",
+    homepage: "https://github.com/agent-ix/quoin#readme",
+    repositoryUrl: "git+https://github.com/agent-ix/quoin.git",
+    license: "AGPL-3.0-or-later",
+  });
+  assert.equal(pkg.name, "@agent-ix/quoin-darwin-x64");
+  assert.deepEqual(pkg.os, ["darwin"]);
+  assert.deepEqual(pkg.cpu, ["x64"]);
+  assert.equal("libc" in pkg, false);
 });
 
 // --- launcherPackageJson ---------------------------------------------------
@@ -259,6 +311,32 @@ test("generate: refuses two targets that collide on the same npm os/cpu", (t) =>
   );
 });
 
+test("generate: refuses a win32 target directory whose sole file is missing .exe", (t) => {
+  runGenerateExpectingRefusal(
+    t,
+    () => {
+      const dir = makeTempDir("publish-native-npm-artifacts-");
+      // Right bytes for a win32 PE binary, but named without the required
+      // .exe extension.
+      writeFakeBinary(path.join(dir, "x86_64-pc-windows-msvc", "quoin"), { type: "pe", machine: 0x8664 });
+      return dir;
+    },
+    /must contain exactly one file named quoin\.exe/
+  );
+});
+
+test("generate: refuses a stray file at the top level of artifacts-dir", (t) => {
+  runGenerateExpectingRefusal(
+    t,
+    () => {
+      const dir = setupArtifacts(["x86_64-unknown-linux-gnu"], "quoin");
+      fs.writeFileSync(path.join(dir, "README.txt"), "stray top-level file");
+      return dir;
+    },
+    /must contain only target directories/
+  );
+});
+
 test("generate: refuses a missing LICENSE file, writes no output", () => {
   const artifactsDir = setupArtifacts(["x86_64-unknown-linux-gnu"], "quoin");
   const workDir = makeTempDir("publish-native-npm-work-");
@@ -377,4 +455,114 @@ test("discoverArtifacts: sole export used directly still enforces the catalog", 
   assert.equal(artifacts.length, 1);
   assert.equal(artifacts[0].target.rust, "x86_64-unknown-linux-gnu");
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// --- assertSafeOutDir / generate: out-dir guard -----------------------------
+
+test("assertSafeOutDir: refuses the workspace root", () => {
+  const workspaceDir = makeTempDir("publish-native-npm-workspace-");
+  assert.throws(
+    () => assertSafeOutDir({ outDir: ".", artifactsDir: "artifacts", workspaceDir, homeDir: "/nonexistent-home" }),
+    /workspace root/
+  );
+  fs.rmSync(workspaceDir, { recursive: true, force: true });
+});
+
+test("assertSafeOutDir: refuses the filesystem root", () => {
+  assert.throws(
+    () => assertSafeOutDir({ outDir: "/", artifactsDir: "artifacts", workspaceDir: "/some/workspace", homeDir: "/nonexistent-home" }),
+    /filesystem root/
+  );
+});
+
+test("assertSafeOutDir: refuses $HOME", () => {
+  const homeDir = makeTempDir("publish-native-npm-home-");
+  assert.throws(
+    () => assertSafeOutDir({ outDir: homeDir, artifactsDir: "artifacts", workspaceDir: "/some/workspace", homeDir }),
+    /\$HOME/
+  );
+  fs.rmSync(homeDir, { recursive: true, force: true });
+});
+
+test("assertSafeOutDir: refuses an ancestor of the workspace", () => {
+  const workspaceDir = makeTempDir("publish-native-npm-workspace-");
+  assert.throws(
+    () =>
+      assertSafeOutDir({
+        outDir: path.dirname(workspaceDir),
+        artifactsDir: "artifacts",
+        workspaceDir,
+        homeDir: "/nonexistent-home",
+      }),
+    /ancestor of the workspace/
+  );
+  fs.rmSync(workspaceDir, { recursive: true, force: true });
+});
+
+test("assertSafeOutDir: refuses an out-dir equal to artifacts-dir", () => {
+  const workspaceDir = makeTempDir("publish-native-npm-workspace-");
+  assert.throws(
+    () =>
+      assertSafeOutDir({
+        outDir: "artifacts",
+        artifactsDir: "artifacts",
+        workspaceDir,
+        homeDir: "/nonexistent-home",
+      }),
+    /contains? artifacts-dir|equal to/
+  );
+  fs.rmSync(workspaceDir, { recursive: true, force: true });
+});
+
+test("assertSafeOutDir: refuses an out-dir that contains artifacts-dir", () => {
+  const workspaceDir = makeTempDir("publish-native-npm-workspace-");
+  // artifacts-dir nested under "build/", so "build" is a proper ancestor of
+  // it without being the workspace root itself.
+  assert.throws(
+    () =>
+      assertSafeOutDir({
+        outDir: "build",
+        artifactsDir: "build/artifacts",
+        workspaceDir,
+        homeDir: "/nonexistent-home",
+      }),
+    /contains artifacts-dir/
+  );
+  fs.rmSync(workspaceDir, { recursive: true, force: true });
+});
+
+test("assertSafeOutDir: accepts an ordinary sibling out-dir", () => {
+  const workspaceDir = makeTempDir("publish-native-npm-workspace-");
+  assert.doesNotThrow(() =>
+    assertSafeOutDir({ outDir: "npm-dist", artifactsDir: "artifacts", workspaceDir, homeDir: "/nonexistent-home" })
+  );
+  fs.rmSync(workspaceDir, { recursive: true, force: true });
+});
+
+test("generate: refuses an unsafe out-dir before writing anything", (t) => {
+  const artifactsDir = setupArtifacts(["x86_64-unknown-linux-gnu"], "quoin");
+  const workDir = makeTempDir("publish-native-npm-work-");
+  const licenseFile = writeLicense(workDir);
+
+  assert.throws(
+    () =>
+      generate({
+        packageName: "@agent-ix/quoin",
+        binaryName: "quoin",
+        version: "1.2.3",
+        artifactsDir,
+        repositorySlug: "agent-ix/quoin",
+        license: "AGPL-3.0-or-later",
+        licenseFile,
+        description: "The quoin CLI",
+        selfUpdateCommand: "",
+        outDir: workDir,
+        workspaceDir: workDir,
+        homeDir: "/nonexistent-home",
+      }),
+    /workspace root/
+  );
+  assert.equal(fs.existsSync(path.join(workDir, "npm-dist")), false);
+  fs.rmSync(artifactsDir, { recursive: true, force: true });
+  fs.rmSync(workDir, { recursive: true, force: true });
 });

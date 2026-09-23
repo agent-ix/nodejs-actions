@@ -81,14 +81,27 @@ suffix) cannot distinguish them.
    every platform package, then the launcher, skipping any `name@version`
    that `npm view` already resolves (idempotent re-runs). It then verifies
    every package resolves on the public registry, retrying with exponential
-   backoff for up to about two minutes to absorb npm propagation lag. The
-   `npm-token` input, when set, is used only to authenticate the first
-   publish of a package that does not yet exist; the OIDC contract (no
-   `registry-url` on `actions/setup-node`, `npm install -g npm@11.6.2` before
-   any publish-capable command) holds regardless of whether a token is
-   supplied, so later runs can rely on Trusted Publishing alone. The token is
-   passed to the step that writes `.npmrc` via an environment variable, never
-   interpolated into a `run:` script.
+   backoff for up to about two minutes to absorb npm propagation lag. A
+   `npm view` failure that is not a confirmed "unpublished" response (404 /
+   "is not in this registry" / "No match found") — a network error, a 5xx, an
+   auth failure — is retried a bounded number of times and then fails loudly;
+   it is never treated as "safe to publish". The `npm-token` input, when set,
+   is available to every publish in the run, not only the first: npm prefers
+   the OIDC exchange whenever the calling job has `permissions: id-token:
+   write`, so a package with a trusted publisher already configured on
+   npmjs.org publishes tokenlessly regardless of `npm-token`. The token only
+   matters for a package that has no trusted publisher configured yet, e.g.
+   its first publish. The OIDC contract (no `registry-url` on
+   `actions/setup-node`, `npm install -g npm@11.6.2` before any
+   publish-capable command) holds regardless of whether a token is supplied.
+   When `npm-token` is empty and the calling job has no OIDC token request
+   URL (`permissions: id-token: write` not granted), the action fails early
+   with a clear `::error::` rather than attempting a publish that can never
+   authenticate. The token is passed to the step that writes `.npmrc` via an
+   environment variable, never interpolated into a `run:` script; that
+   `.npmrc` is written to a runner-temp path (never `$HOME/.npmrc`), pointed
+   at via `NPM_CONFIG_USERCONFIG` for the steps that run npm, and removed in
+   a final `if: always()` step.
 5. **Launcher process contract.** The installed binary command resolves
    `<name>-<platform>-<arch>/bin/<binary>[.exe]` via `require.resolve`,
    restricted to an own property of the launcher's `optionalDependencies` —
@@ -119,6 +132,12 @@ suffix) cannot distinguish them.
 | FR-001-AC-10 | An unsupported platform/arch exits 1, lists the generated supported set, and launches nothing. | Test (`launcher.test.mjs`) |
 | FR-001-AC-11 | A supported but absent optional dependency package exits 1, names that exact package, and launches nothing. | Test (`launcher.test.mjs`) |
 | FR-001-AC-12 | When `nativeLauncher.selfUpdateCommand` is set and matches `argv[2]`, the launcher prints the update hint, exits 1, and never spawns the binary. | Test (`launcher.test.mjs`) |
+| FR-001-AC-13 | `out-dir` resolving to the workspace root, the filesystem root, `$HOME`, an ancestor of the workspace, or a path equal to or containing `artifacts-dir` is refused before any output is written. | Test (`generate.test.mjs`) |
+| FR-001-AC-14 | Publishing publishes every platform package before the launcher package, since the launcher's `optionalDependencies` reference them at the release version. | Test (`publish.test.mjs`) |
+| FR-001-AC-15 | A `name@version` that `npm view` already resolves is skipped rather than re-published. | Test (`publish.test.mjs`) |
+| FR-001-AC-16 | Verification retries with exponential backoff until the package resolves, and fails with a clear error once the deadline passes. | Test (`publish.test.mjs`) |
+| FR-001-AC-17 | A `npm view` failure other than a confirmed "unpublished" response (404 / "is not in this registry" / "No match found") is retried and then fails loudly; it is never treated as license to publish. | Test (`publish.test.mjs`) |
+| FR-001-AC-18 | When `publish` is `"true"`, `npm-token` is empty, and the calling job has no OIDC token request URL, the action fails early with a clear `::error::` naming the missing `permissions: id-token: write`, before attempting any publish. | Manual (composite-action step; see `action.yml`) |
 
 ## Dependencies
 
