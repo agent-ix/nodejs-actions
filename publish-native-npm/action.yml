@@ -75,25 +75,41 @@ runs:
 
     - name: Generate packages
       shell: bash
+      # Inputs reach the script through env, never interpolated into it.
+      env:
+        IN_PACKAGE: ${{ inputs.package }}
+        IN_BINARY: ${{ inputs.binary }}
+        IN_VERSION: ${{ inputs.version }}
+        IN_ARTIFACTS_DIR: ${{ inputs.artifacts-dir }}
+        IN_REPOSITORY: ${{ inputs.repository }}
+        IN_LICENSE: ${{ inputs.license }}
+        IN_DESCRIPTION: ${{ inputs.description }}
+        IN_SELF_UPDATE_COMMAND: ${{ inputs.self-update-command }}
+        IN_OUT_DIR: ${{ inputs.out-dir }}
+        IN_PUBLISH: ${{ inputs.publish }}
       run: |
         node "$GITHUB_ACTION_PATH/pack.mjs" generate \
-          --package "${{ inputs.package }}" \
-          --binary "${{ inputs.binary }}" \
-          --version "${{ inputs.version }}" \
-          --artifacts-dir "${{ inputs.artifacts-dir }}" \
-          --repository "${{ inputs.repository }}" \
-          --license "${{ inputs.license }}" \
+          --package "$IN_PACKAGE" \
+          --binary "$IN_BINARY" \
+          --version "$IN_VERSION" \
+          --artifacts-dir "$IN_ARTIFACTS_DIR" \
+          --repository "$IN_REPOSITORY" \
+          --license "$IN_LICENSE" \
           --license-file "$GITHUB_WORKSPACE/LICENSE" \
-          --description "${{ inputs.description }}" \
-          --self-update-command "${{ inputs.self-update-command }}" \
-          --out-dir "${{ inputs.out-dir }}" \
-          --publish "${{ inputs.publish }}"
+          --description "$IN_DESCRIPTION" \
+          --self-update-command "$IN_SELF_UPDATE_COMMAND" \
+          --out-dir "$IN_OUT_DIR" \
+          --publish "$IN_PUBLISH"
 
     - name: Publish and verify
       if: ${{ inputs.publish == 'true' }}
       shell: bash
+      env:
+        IN_PACKAGE: ${{ inputs.package }}
+        IN_VERSION: ${{ inputs.version }}
+        IN_OUT_DIR: ${{ inputs.out-dir }}
       run: |
         node "$GITHUB_ACTION_PATH/pack.mjs" publish \
-          --package "${{ inputs.package }}" \
-          --version "${{ inputs.version }}" \
-          --out-dir "${{ inputs.out-dir }}"
+          --package "$IN_PACKAGE" \
+          --version "$IN_VERSION" \
+          --out-dir "$IN_OUT_DIR"
