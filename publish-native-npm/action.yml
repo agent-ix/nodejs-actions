@@ -1,0 +1,99 @@
+name: "Publish native npm package"
+description: >-
+  Publishes a prebuilt native (Rust) CLI to public npmjs as a launcher
+  package plus per-platform binary packages.
+
+inputs:
+  package:
+    description: 'Launcher package name, e.g. "@agent-ix/quoin". Platform packages are named "<package>-<os>-<cpu>".'
+    required: true
+  binary:
+    description: 'Binary name, e.g. "quoin". On win32 the file is "<binary>.exe".'
+    required: true
+  version:
+    description: "Release version, X.Y.Z with no leading v."
+    required: true
+  artifacts-dir:
+    description: >-
+      Directory containing ONLY subdirectories named by Rust target triple,
+      each holding exactly one file, <binary> or <binary>.exe.
+    required: false
+    default: "artifacts"
+  repository:
+    description: 'GitHub "owner/repo", e.g. "agent-ix/quoin". Used for homepage and repository.url.'
+    required: true
+  license:
+    description: "SPDX license identifier written into every generated package.json."
+    required: false
+    default: "AGPL-3.0-or-later"
+  description:
+    description: "Description written into the launcher package.json."
+    required: true
+  self-update-command:
+    description: >-
+      When set, the launcher intercepts this subcommand and prints an
+      "update with npm" hint instead of spawning the binary.
+    required: false
+    default: ""
+  publish:
+    description: 'When "false" (default), generate packages and print manifests + "npm pack --dry-run" listings, then stop.'
+    required: false
+    default: "false"
+  npm-token:
+    description: "npm auth token, used only for the first publish of a package that does not exist yet."
+    required: false
+    default: ""
+  out-dir:
+    description: "Directory to write the generated packages into."
+    required: false
+    default: "npm-dist"
+
+runs:
+  using: "composite"
+  steps:
+    # OIDC contract (see CLAUDE.md): no registry-url on setup-node, and npm
+    # must be upgraded to >=11.5.1 for Trusted Publishing support before any
+    # npm command that might publish runs.
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22.15.0"
+
+    - name: Install pinned npm
+      shell: bash
+      run: npm install -g npm@11.6.2
+
+    - name: Write npm auth config
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.npm-token }}
+      run: |
+        if [ -n "$NPM_TOKEN" ]; then
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=%s\nprovenance=false\n' "$NPM_TOKEN" > "$HOME/.npmrc"
+        else
+          printf 'registry=https://registry.npmjs.org/\n@agent-ix:registry=https://registry.npmjs.org/\nprovenance=false\n' > "$HOME/.npmrc"
+        fi
+
+    - name: Generate packages
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/pack.mjs" generate \
+          --package "${{ inputs.package }}" \
+          --binary "${{ inputs.binary }}" \
+          --version "${{ inputs.version }}" \
+          --artifacts-dir "${{ inputs.artifacts-dir }}" \
+          --repository "${{ inputs.repository }}" \
+          --license "${{ inputs.license }}" \
+          --license-file "$GITHUB_WORKSPACE/LICENSE" \
+          --description "${{ inputs.description }}" \
+          --self-update-command "${{ inputs.self-update-command }}" \
+          --out-dir "${{ inputs.out-dir }}" \
+          --publish "${{ inputs.publish }}"
+
+    - name: Publish and verify
+      if: ${{ inputs.publish == 'true' }}
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/pack.mjs" publish \
+          --package "${{ inputs.package }}" \
+          --version "${{ inputs.version }}" \
+          --out-dir "${{ inputs.out-dir }}"
