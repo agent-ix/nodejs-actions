@@ -81,7 +81,7 @@ suffix) cannot distinguish them.
    every platform package, then the launcher, skipping any `name@version`
    that `npm view` already resolves (idempotent re-runs). It then verifies
    every package resolves on the public registry, retrying with exponential
-   backoff for up to about two minutes to absorb npm propagation lag. A
+   backoff for up to 15 minutes to absorb npm propagation lag. A
    `npm view` failure that is not a confirmed "unpublished" response (404 /
    "is not in this registry" / "No match found") — a network error, a 5xx, an
    auth failure — is retried a bounded number of times and then fails loudly;
