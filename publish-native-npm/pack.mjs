@@ -519,10 +519,12 @@ export async function publishOne(pkg, version, options = {}) {
  * makes the backoff and deadline injectable so tests do not need to wait on
  * real wall-clock delays. A transient `npmViewVersion` failure here is
  * treated the same as "not visible yet" — the deadline is what ultimately
- * turns a stuck registry into a loud failure.
+ * turns a stuck registry into a loud failure. The default is 15 minutes:
+ * npm took ~7 minutes to serve four newly created 12 MB platform packages on
+ * their first publish (quoin 0.24.1).
  */
 export async function verifyPublished(name, version, options = {}) {
-  const { initialDelayMs = 2000, maxDelayMs = 20_000, deadlineMs = 120_000 } = options;
+  const { initialDelayMs = 2000, maxDelayMs = 60_000, deadlineMs = 900_000 } = options;
   const spec = `${name}@${version}`;
   const deadline = Date.now() + deadlineMs;
   let wait = initialDelayMs;
