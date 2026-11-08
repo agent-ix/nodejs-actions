@@ -35,6 +35,13 @@ inputs:
       "update with npm" hint instead of spawning the binary.
     required: false
     default: ""
+  static-musl:
+    description: >-
+      When "true", musl targets are published WITHOUT a "libc" restriction,
+      for fully static musl binaries that also run on glibc Linux. Default
+      "false" keeps "libc": ["musl"]. gnu targets are unaffected.
+    required: false
+    default: "false"
   publish:
     description: 'When "false" (default), generate packages and print manifests + "npm pack --dry-run" listings, then stop.'
     required: false
@@ -104,6 +111,7 @@ runs:
         IN_LICENSE: ${{ inputs.license }}
         IN_DESCRIPTION: ${{ inputs.description }}
         IN_SELF_UPDATE_COMMAND: ${{ inputs.self-update-command }}
+        IN_STATIC_MUSL: ${{ inputs.static-musl }}
         IN_OUT_DIR: ${{ inputs.out-dir }}
         IN_PUBLISH: ${{ inputs.publish }}
         NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/publish-native-npm.npmrc
@@ -118,6 +126,7 @@ runs:
           --license-file "$GITHUB_WORKSPACE/LICENSE" \
           --description "$IN_DESCRIPTION" \
           --self-update-command "$IN_SELF_UPDATE_COMMAND" \
+          --static-musl "$IN_STATIC_MUSL" \
           --out-dir "$IN_OUT_DIR" \
           --publish "$IN_PUBLISH"
 

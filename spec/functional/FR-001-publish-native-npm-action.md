@@ -50,6 +50,10 @@ the `gnu` and `musl` variants of `linux-x64` in one run) are refused, since
 the fixed platform-package naming scheme (`<package>-<os>-<cpu>`, no libc
 suffix) cannot distinguish them.
 
+The opt-in input `static-musl` (default `false`) omits `libc` from musl
+targets' platform packages, for fully static musl binaries that run on glibc
+too. It changes nothing for gnu or non-Linux targets.
+
 ## Behavior
 
 1. **Validation before any write.** The action reads `artifacts-dir`, which
@@ -138,6 +142,7 @@ suffix) cannot distinguish them.
 | FR-001-AC-16 | Verification retries with exponential backoff until the package resolves, and fails with a clear error once the deadline passes. | Test (`publish.test.mjs`) |
 | FR-001-AC-17 | A `npm view` failure other than a confirmed "unpublished" response (404 / "is not in this registry" / "No match found") is retried and then fails loudly; it is never treated as license to publish. | Test (`publish.test.mjs`) |
 | FR-001-AC-18 | When `publish` is `"true"`, `npm-token` is empty, and the calling job has no OIDC token request URL, the action fails early with a clear `::error::` naming the missing `permissions: id-token: write`, before attempting any publish. | Manual (composite-action step; see `action.yml`) |
+| FR-001-AC-19 | With `static-musl` true, musl platform `package.json` files have no `libc` key; gnu targets and the default (false) output are unchanged. | Test (`generate.test.mjs`) |
 
 ## Dependencies
 

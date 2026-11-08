@@ -12,7 +12,8 @@
 //   node pack.mjs generate --package <pkg> --binary <bin> --version <x.y.z> \
 //     --artifacts-dir <dir> --repository <owner/repo> --license <spdx> \
 //     --license-file <path> --description <text> \
-//     [--self-update-command <cmd>] --out-dir <dir> --publish <true|false>
+//     [--self-update-command <cmd>] [--static-musl <true|false>] \
+//     --out-dir <dir> --publish <true|false>
 //
 //   node pack.mjs publish --package <pkg> --version <x.y.z> --out-dir <dir>
 
@@ -262,7 +263,7 @@ export function assertSafeOutDir({ outDir, artifactsDir, workspaceDir = process.
 // runs given identical inputs.
 // ---------------------------------------------------------------------------
 
-export function platformPackageJson({ target, packageName, binaryName, version, description, homepage, repositoryUrl, license }) {
+export function platformPackageJson({ target, packageName, binaryName, version, description, homepage, repositoryUrl, license, staticMusl = false }) {
   void description; // platform packages get their own generated description
   const pkg = {
     name: `${packageName}-${target.os}-${target.cpu}`,
@@ -274,7 +275,9 @@ export function platformPackageJson({ target, packageName, binaryName, version, 
     os: [target.os],
     cpu: [target.cpu],
   };
-  if (target.libc) {
+  // staticMusl: the musl binary is fully static and runs on glibc too, so it
+  // must not carry the libc restriction that makes npm skip it on glibc Linux.
+  if (target.libc && !(staticMusl && target.libc === "musl")) {
     pkg.libc = [target.libc];
   }
   pkg.files = ["bin/", "LICENSE"];
@@ -354,6 +357,7 @@ export function generate({
   licenseFile,
   description,
   selfUpdateCommand,
+  staticMusl = false,
   outDir,
   workspaceDir,
   homeDir,
@@ -388,7 +392,7 @@ export function generate({
   const generated = [];
 
   for (const { target, filePath } of artifacts) {
-    const pkgJson = platformPackageJson({ target, packageName, binaryName, version, description, homepage, repositoryUrl, license });
+    const pkgJson = platformPackageJson({ target, packageName, binaryName, version, description, homepage, repositoryUrl, license, staticMusl });
     const pkgDir = path.join(outDir, pkgJson.name);
     const binDir = path.join(pkgDir, "bin");
     fs.mkdirSync(binDir, { recursive: true });
@@ -619,6 +623,7 @@ function runGenerate(args) {
     licenseFile: required(args, "license-file"),
     description: required(args, "description"),
     selfUpdateCommand: args["self-update-command"] || "",
+    staticMusl: (args["static-musl"] || "false") === "true",
     outDir,
   });
 

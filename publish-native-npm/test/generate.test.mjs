@@ -566,3 +566,63 @@ test("generate: refuses an unsafe out-dir before writing anything", (t) => {
   fs.rmSync(artifactsDir, { recursive: true, force: true });
   fs.rmSync(workDir, { recursive: true, force: true });
 });
+
+// --- static-musl opt-in ------------------------------------------------------
+
+test("platformPackageJson: staticMusl omits libc on musl targets only", () => {
+  const base = {
+    packageName: "@agent-ix/quire-cli",
+    binaryName: "quire",
+    version: "1.2.3",
+    description: "x",
+    homepage: "https://github.com/agent-ix/quire-rs#readme",
+    repositoryUrl: "git+https://github.com/agent-ix/quire-rs.git",
+    license: "AGPL-3.0-or-later",
+  };
+  for (const rust of ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]) {
+    const pkg = platformPackageJson({ ...base, target: target(rust), staticMusl: true });
+    assert.equal("libc" in pkg, false, `${rust} static musl package must not declare libc`);
+    assert.deepEqual(pkg.os, ["linux"]);
+    assert.match(pkg.name, /-linux-(x64|arm64)$/);
+  }
+  const gnu = platformPackageJson({ ...base, target: target("x86_64-unknown-linux-gnu"), staticMusl: true });
+  assert.deepEqual(gnu.libc, ["glibc"]);
+  // Default and explicit false keep the musl restriction, byte-identical.
+  const defaulted = platformPackageJson({ ...base, target: target("x86_64-unknown-linux-musl") });
+  const explicit = platformPackageJson({ ...base, target: target("x86_64-unknown-linux-musl"), staticMusl: false });
+  assert.deepEqual(defaulted.libc, ["musl"]);
+  assert.equal(JSON.stringify(defaulted), JSON.stringify(explicit));
+});
+
+test("generate: staticMusl writes musl platform packages without libc, default unchanged", () => {
+  const artifactsDir = setupArtifacts(["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"], "quire");
+  const workDir = makeTempDir("publish-native-npm-work-");
+  const licenseFile = writeLicense(workDir, "AGPL license text\n");
+  const options = {
+    packageName: "@agent-ix/quire-cli",
+    binaryName: "quire",
+    version: "1.2.3",
+    artifactsDir,
+    repositorySlug: "agent-ix/quire-rs",
+    license: "AGPL-3.0-or-later",
+    licenseFile,
+    description: "The quire CLI",
+    selfUpdateCommand: "",
+    outDir: path.join(workDir, "npm-dist"),
+  };
+  const libcOf = (generated, name) => generated.find((pkg) => pkg.name === name).json;
+  const off = generate(options);
+  assert.deepEqual(libcOf(off, "@agent-ix/quire-cli-linux-x64").libc, ["musl"]);
+  const on = generate({ ...options, staticMusl: true });
+  for (const name of ["@agent-ix/quire-cli-linux-x64", "@agent-ix/quire-cli-linux-arm64"]) {
+    assert.equal("libc" in libcOf(on, name), false);
+    const raw = fs.readFileSync(path.join(options.outDir, name, "package.json"), "utf8");
+    assert.equal(raw.includes('"libc"'), false);
+  }
+  assert.deepEqual(
+    Object.keys(libcOf(on, "@agent-ix/quire-cli").optionalDependencies).sort(),
+    ["@agent-ix/quire-cli-linux-arm64", "@agent-ix/quire-cli-linux-x64"]
+  );
+  fs.rmSync(artifactsDir, { recursive: true, force: true });
+  fs.rmSync(workDir, { recursive: true, force: true });
+});
