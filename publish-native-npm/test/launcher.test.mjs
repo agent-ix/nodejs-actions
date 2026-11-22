@@ -104,6 +104,26 @@ test("launcher: self-update intercept prints message, exits 1, and never spawns"
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test("launcher: self-update command with --help or -h passes through to the native binary", { skip: shSkip }, () => {
+  const root = setupPackage({
+    name: "@agent-ix/quoin",
+    binary: "quoin",
+    selfUpdateCommand: "update",
+    optionalDependencies: { [`@agent-ix/quoin-${process.platform}-${process.arch}`]: "1.2.3" },
+    installPlatformPackage: true,
+  });
+
+  for (const flag of ["--help", "-h"]) {
+    const result = runLauncher(root, ["update", flag]);
+
+    assert.equal(result.status, 23, flag);
+    assert.match(result.stdout, new RegExp(`ARGS:update ${flag}`), flag);
+    assert.doesNotMatch(result.stderr, /was installed with npm/, flag);
+  }
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("launcher: unsupported platform names the built set and exits 1", () => {
   const root = setupPackage({
     name: "@agent-ix/quoin",

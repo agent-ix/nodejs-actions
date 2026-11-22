@@ -14,7 +14,8 @@
 //   - Forward SIGINT/SIGTERM/SIGHUP received by the launcher to the child.
 //   - Mirror the child's exit status, or re-raise its terminating signal.
 //   - If nativeLauncher.selfUpdateCommand is set and matches argv[2], print
-//     an update hint and exit 1 without spawning anything.
+//     an update hint and exit 1 without spawning anything, unless --help/-h
+//     follows it (then the native binary prints the command's help).
 
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -35,7 +36,12 @@ if (!BINARY) {
   process.exit(1);
 }
 
-if (SELF_UPDATE_COMMAND && process.argv[2] === SELF_UPDATE_COMMAND) {
+// `--help` / `-h` after the command is passed through to the native binary so
+// it can print the command's help; only actually running the command is
+// intercepted.
+const WANTS_HELP = process.argv.slice(3).some((arg) => arg === "--help" || arg === "-h");
+
+if (SELF_UPDATE_COMMAND && process.argv[2] === SELF_UPDATE_COMMAND && !WANTS_HELP) {
   process.stderr.write(
     `${BINARY} was installed with npm; update it with: npm install -g ${NAME}@latest\n`
   );
